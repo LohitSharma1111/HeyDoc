@@ -762,14 +762,14 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     nav_options = [
-        "🎙  Record & Transcribe",
-        "📋  SOAP Note",
-        "👤  Patient Summary",
-        "🏷  ICD-10 Codes",
-        "🔔  Follow-Up",
-        "📡  Send Document",
-        "👥  Sessions",
-        "🗂  Audit Log",
+        "Record & Transcribe",
+        "SOAP Note",
+        "Patient Summary",
+        "ICD-10 Codes",
+        "Follow-Up",
+        "Send Document",
+        "Sessions",
+        "Audit Log",
     ]
     page = st.radio("nav", nav_options, label_visibility="collapsed")
 
@@ -1138,7 +1138,7 @@ def empty_state(msg="Generate a note first to use this page."):
 # ══════════════════════════════════════════════════════════════════════════════
 
 # ── PAGE 1: Record & Transcribe ───────────────────────────────────────────────
-if page == "🎙  Record & Transcribe":
+if page == "Record & Transcribe":
     page_header("🎙", "Record & Transcribe",
                 "Capture audio or paste a transcript to generate your SOAP note")
 
@@ -1240,7 +1240,7 @@ if page == "🎙  Record & Transcribe":
             st.markdown("<div style='padding:4px 0'>" + "".join(html) + "</div>", unsafe_allow_html=True)
 
 # ── PAGE 2: SOAP Note ─────────────────────────────────────────────────────────
-elif page == "📋  SOAP Note":
+elif page == "SOAP Note":
     page_header("📋", "SOAP Note", "AI-generated clinical documentation")
 
     if not st.session_state.pipeline_ran:
@@ -1254,7 +1254,7 @@ elif page == "📋  SOAP Note":
                                file_name="soap_note.pdf", mime="application/pdf", use_container_width=True)
 
 # ── PAGE 3: Patient Summary ───────────────────────────────────────────────────
-elif page == "👤  Patient Summary":
+elif page == "Patient Summary":
     page_header("👤", "Patient Summary", "Plain-language visit summary for the patient")
 
     if not st.session_state.pipeline_ran:
@@ -1266,7 +1266,7 @@ elif page == "👤  Patient Summary":
         st.caption("Editable — adjust tone or details before printing or messaging")
 
 # ── PAGE 4: ICD-10 Codes ──────────────────────────────────────────────────────
-elif page == "🏷  ICD-10 Codes":
+elif page == "ICD-10 Codes":
     page_header("🏷", "ICD-10 Codes", "AI-suggested billing codes based on the assessment")
 
     if not st.session_state.pipeline_ran:
@@ -1291,7 +1291,7 @@ elif page == "🏷  ICD-10 Codes":
             st.caption("AI suggestions only — verify with a certified coder before billing")
 
 # ── PAGE 5: Follow-Up ────────────────────────────────────────────────────────
-elif page == "🔔  Follow-Up":
+elif page == "Follow-Up":
     page_header("🔔", "Follow-Up Reminder", "Generate a friendly patient reminder message")
 
     if not st.session_state.pipeline_ran:
@@ -1310,7 +1310,7 @@ elif page == "🔔  Follow-Up":
             st.caption("Copy into your SMS platform or patient portal")
 
 # ── PAGE 6: Send Document ─────────────────────────────────────────────────────
-elif page == "📡  Send Document":
+elif page == "Send Document":
     page_header("📡", "Send Document", "Transmit the SOAP note by fax or email")
 
     if not st.session_state.soap_pdf_bytes:
@@ -1368,7 +1368,7 @@ elif page == "📡  Send Document":
                     st.error(f"Transmission failed · {result.get('error','Unknown error')}")
 
 # ── PAGE 7: Sessions ──────────────────────────────────────────────────────────
-elif page == "👥  Sessions":
+elif page == "Sessions":
     page_header("👥", "Sessions", "Today's patient records")
 
     sessions = st.session_state.patient_sessions
@@ -1411,7 +1411,7 @@ elif page == "👥  Sessions":
                                            use_container_width=True)
 
 # ── PAGE 8: Audit Log ─────────────────────────────────────────────────────────
-elif page == "🗂  Audit Log":
+elif page == "Audit Log":
     page_header("🗂", "Audit Log", "All actions recorded in this session")
 
     log = st.session_state.audit_log
