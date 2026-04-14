@@ -1,4 +1,15 @@
+# Secrets
 .streamlit/secrets.toml
-venv/
-__pycache__/
 .env
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp files
+*.tmp
+*.log
