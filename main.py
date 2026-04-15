@@ -6,6 +6,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+st.write("VERSION 2 - CHECK")
 
 # ── HIPAA FIX 5: Auto-expiry (5-minute inactivity timeout) ───────────────────
 import time
