@@ -8,6 +8,7 @@ st.set_page_config(
 )
 st.write("VERSION 2 - CHECK")
 
+
 # ── HIPAA FIX 5: Auto-expiry (5-minute inactivity timeout) ───────────────────
 import time
 
@@ -25,12 +26,13 @@ st.session_state.last_active = time.time()
 
 if "splash_shown" not in st.session_state:
     st.session_state.splash_shown = True
+    # FIX 2: Splash background → white; logo + "BitDoc" text → teal (#12C4B3)
     st.markdown('''
     <style>
     .splash-screen {
         position: fixed;
         top: 0; left: 0; width: 100vw; height: 100vh;
-        background: radial-gradient(circle at center, #15171A 0%, #08090A 100%);
+        background: #FFFFFF;
         z-index: 999999;
         display: flex;
         flex-direction: column;
@@ -46,22 +48,22 @@ if "splash_shown" not in st.session_state:
         opacity: 0;
         animation: popIn 1s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, floatLogo 3s ease-in-out infinite;
         animation-delay: 0.2s, 1.2s;
-        filter: drop-shadow(0 10px 25px rgba(212, 175, 55, 0.4));
+        filter: drop-shadow(0 10px 25px rgba(18, 196, 179, 0.35));
     }
     .splash-text {
         font-family: 'Playfair Display', Georgia, serif;
         font-size: 3.5rem;
-        color: #D4AF37;
+        color: #12C4B3;
         opacity: 0;
         letter-spacing: 0.05em;
         font-weight: 500;
-        text-shadow: 0 4px 20px rgba(212, 175, 55, 0.3);
+        text-shadow: 0 4px 20px rgba(18, 196, 179, 0.25);
         animation: fadeInText 1.2s ease-out forwards;
         animation-delay: 0.8s;
     }
     .splash-sub {
         font-family: 'Inter', sans-serif;
-        color: #8E8A83;
+        color: #64748B;
         font-size: 1rem;
         text-transform: uppercase;
         letter-spacing: 0.3em;
@@ -71,8 +73,8 @@ if "splash_shown" not in st.session_state:
         animation-delay: 1.2s;
     }
     @keyframes fadeOutSplash {
-        0% { opacity: 1; pointer-events: all; backdrop-filter: blur(10px); }
-        99% { opacity: 0; pointer-events: none; backdrop-filter: blur(0px); }
+        0% { opacity: 1; pointer-events: all; }
+        99% { opacity: 0; pointer-events: none; }
         100% { opacity: 0; pointer-events: none; display: none; z-index: -1; }
     }
     @keyframes fadeInText {
@@ -85,7 +87,7 @@ if "splash_shown" not in st.session_state:
     }
     @keyframes floatLogo {
         0% { transform: translateY(0); }
-        50% { transform: translateY(-10px); filter: drop-shadow(0 15px 35px rgba(212, 175, 55, 0.6)); }
+        50% { transform: translateY(-10px); filter: drop-shadow(0 15px 35px rgba(18, 196, 179, 0.5)); }
         100% { transform: translateY(0); }
     }
     body:has(.splash-screen) { overflow: hidden !important; }
@@ -129,9 +131,6 @@ st.markdown("""
 
 .stApp { background: var(--bg) !important; color: var(--ink) !important; min-height: 100vh; }
 
-.material-icons, .material-symbols-rounded, .material-symbols-outlined {
-    font-family: 'Material Symbols Rounded', 'Material Icons', sans-serif !important;
-}
 [data-testid="stExpanderToggleIcon"] { display: none !important; }
 
 /* Keep Streamlit header controls visually consistent */
@@ -152,30 +151,49 @@ header[data-testid="stHeader"] button[kind="header"]:hover {
     border-color: var(--border-hi) !important;
     background: #F8FAFC !important;
 }
-header[data-testid="stHeader"] button[kind="header"] span,
-header[data-testid="stHeader"] button[kind="header"] div {
-    font-family: 'Material Symbols Rounded', 'Material Icons', sans-serif !important;
-}
+/* Sidebar toggle button - avoid raw Material icon text if the font is unavailable */
 
-/* Fix broken sidebar collapse label rendering as text like "keyboard_double..." */
-section[data-testid="stSidebar"] button[kind="header"] {
+/* FIX 3: Sidebar collapse button — hide ALL child text nodes that render raw icon names */
+header[data-testid="stHeader"] button[kind="header"][aria-label*="sidebar" i],
+header[data-testid="stHeader"] button[kind="header"][title*="sidebar" i],
+section[data-testid="stSidebar"] button[kind="header"][aria-label*="sidebar" i],
+section[data-testid="stSidebar"] button[kind="header"][title*="sidebar" i] {
     min-width: 2.25rem !important;
     width: 2.25rem !important;
     height: 2.25rem !important;
     padding: 0 !important;
+    color: transparent !important;
+    font-size: 0 !important;
+    line-height: 0 !important;
+    text-indent: -9999px !important;
+    white-space: nowrap !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+section[data-testid="stSidebar"] button[kind="header"][aria-label*="sidebar" i],
+section[data-testid="stSidebar"] button[kind="header"][title*="sidebar" i] {
     border: 0 !important;
     background: transparent !important;
     box-shadow: none !important;
-    color: transparent !important;
-    position: relative !important;
 }
-section[data-testid="stSidebar"] button[kind="header"] span,
-section[data-testid="stSidebar"] button[kind="header"] div,
-section[data-testid="stSidebar"] button[kind="header"] p {
-    opacity: 0 !important;
+header[data-testid="stHeader"] button[kind="header"][aria-label*="sidebar" i] *,
+header[data-testid="stHeader"] button[kind="header"][title*="sidebar" i] *,
+section[data-testid="stSidebar"] button[kind="header"][aria-label*="sidebar" i] *,
+section[data-testid="stSidebar"] button[kind="header"][title*="sidebar" i] * {
     font-size: 0 !important;
+    line-height: 0 !important;
+    color: transparent !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    display: block !important;
 }
-section[data-testid="stSidebar"] button[kind="header"]::before {
+header[data-testid="stHeader"] button[kind="header"][aria-label*="sidebar" i]::before,
+header[data-testid="stHeader"] button[kind="header"][title*="sidebar" i]::before,
+section[data-testid="stSidebar"] button[kind="header"][aria-label*="sidebar" i]::before,
+section[data-testid="stSidebar"] button[kind="header"][title*="sidebar" i]::before {
     content: "" !important;
     position: absolute !important;
     inset: 0 !important;
@@ -185,10 +203,41 @@ section[data-testid="stSidebar"] button[kind="header"]::before {
     border-radius: 999px !important;
     background: var(--sb-ink-2) !important;
     box-shadow: 0 -6px 0 var(--sb-ink-2), 0 6px 0 var(--sb-ink-2) !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
-section[data-testid="stSidebar"] button[kind="header"]:hover::before {
+header[data-testid="stHeader"] button[kind="header"][aria-label*="sidebar" i]:hover::before,
+header[data-testid="stHeader"] button[kind="header"][title*="sidebar" i]:hover::before,
+section[data-testid="stSidebar"] button[kind="header"][aria-label*="sidebar" i]:hover::before,
+section[data-testid="stSidebar"] button[kind="header"][title*="sidebar" i]:hover::before {
     background: var(--sb-ink) !important;
     box-shadow: 0 -6px 0 var(--sb-ink), 0 6px 0 var(--sb-ink) !important;
+}
+section[data-testid="stSidebar"] button[kind="header"],
+section[data-testid="stSidebar"] button[kind="header"]:hover,
+section[data-testid="stSidebar"] button[kind="header"]:focus {
+    color: transparent !important;
+    font-size: 0 !important;
+    line-height: 0 !important;
+    text-indent: -9999px !important;
+    text-shadow: none !important;
+}
+section[data-testid="stSidebar"] button[kind="header"]::after,
+section[data-testid="stSidebar"] button[kind="header"]:hover::after,
+section[data-testid="stSidebar"] button[kind="header"]:focus::after {
+    content: "" !important;
+}
+section[data-testid="stSidebar"] > div:first-child {
+    color: transparent !important;
+    font-size: 0 !important;
+    line-height: 0 !important;
+    text-shadow: none !important;
+}
+section[data-testid="stSidebar"] > div:first-child * {
+    text-shadow: none !important;
+}
+section[data-testid="stSidebar"] > div:first-child button[kind="header"]::after {
+    content: "" !important;
 }
 
 section[data-testid="stSidebar"] {
@@ -284,8 +333,51 @@ section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
 label, .stSelectbox label { color: var(--ink-3) !important; font-size: 0.7rem !important; font-weight: 800 !important; text-transform: uppercase !important; letter-spacing: 0.14em !important; margin-bottom: 6px !important; }
 
 .session-list-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); margin-top: 14px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
-.sp-tag { color: #000000 !important; }
-.sp-speech { color: #000000 !important; }
+
+/* FIX 1: Diarization speaker tags — Doctor = teal, Patient = blue; clear separator */
+.sp-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 7px 4px;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+.sp-line:last-child { border-bottom: none; }
+.sp-tag {
+    flex-shrink: 0;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 3px 8px;
+    border-radius: 5px;
+    margin-top: 1px;
+    min-width: 32px;
+    text-align: center;
+}
+.sp-tag.doc {
+    background: rgba(18,196,179,0.12);
+    color: #0D9488;
+    border: 1px solid rgba(18,196,179,0.3);
+}
+.sp-tag.pat {
+    background: rgba(59,130,246,0.1);
+    color: #2563EB;
+    border: 1px solid rgba(59,130,246,0.25);
+}
+.sp-sep {
+    color: #CBD5E1;
+    font-weight: 400;
+    margin-top: 1px;
+    flex-shrink: 0;
+}
+.sp-speech {
+    color: #1E293B !important;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    flex: 1;
+}
+
 .icd-row { display: flex; align-items: center; gap: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 14px 18px; margin-bottom: 10px; transition: all 0.2s ease; }
 .icd-row:hover { border-color: var(--border-hi); background: var(--bg); }
 .icd-code { font-family: 'JetBrains Mono', monospace !important; font-size: 0.88rem; color: var(--teal-dim); font-weight: 700; width: 68px; }
@@ -310,7 +402,6 @@ label, .stSelectbox label { color: var(--ink-3) !important; font-size: 0.7rem !i
 
 # ── Session state ──────────────────────────────────────────────────────────────
 defaults = {
-    # HIPAA FIX 1: No patient name — use anonymous ID only
     "session_id": "",
     "raw_transcript": "",
     "diarized_transcript": "",
@@ -319,9 +410,7 @@ defaults = {
     "soap_pdf_bytes": b"",
     "soap_dict": {},
     "pipeline_ran": False,
-    # HIPAA FIX 2: audit log with no PHI
     "audit_log": [],
-    # HIPAA FIX 3: patient_sessions REMOVED — no long-lived PHI storage
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -345,12 +434,11 @@ def clear_sensitive_data():
     for key in phi_keys:
         if key in st.session_state:
             del st.session_state[key]
-    # Re-init non-PHI state
     st.session_state.pipeline_ran = False
     st.session_state.soap_pdf_bytes = b""
     st.session_state.soap_dict = {}
 
-# ── HIPAA FIX 1: Generate anonymous session ID (no real name ever stored) ─────
+# ── HIPAA FIX 1: Generate anonymous session ID ─────────────────────────────────
 def new_session_id():
     import random
     return f"SESSION-{random.randint(10000, 99999)}"
@@ -359,7 +447,7 @@ def new_session_id():
 with st.sidebar:
     st.markdown("""
     <div class="brand-block">
-        <div class="brand-icon">🎙</div>
+        <div class="brand-icon">🩺</div>
         <div>
             <div class="brand-name">BITDOC</div>
             <div class="brand-sub">Medical Scribe</div>
@@ -393,7 +481,6 @@ with st.sidebar:
             No note yet
         </div>""", unsafe_allow_html=True)
 
-    # HIPAA badge & session timer
     elapsed = int(time.time() - st.session_state.last_active)
     remaining = max(0, 300 - elapsed)
     mins, secs = divmod(remaining, 60)
@@ -402,7 +489,6 @@ with st.sidebar:
     <div class="session-timer">⏱ Auto-clear in {mins}m {secs:02d}s</div>
     """, unsafe_allow_html=True)
 
-    # Manual clear button
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🗑 Clear Session Now", use_container_width=True):
         clear_sensitive_data()
@@ -457,8 +543,18 @@ def transcribe_with_whisper(audio_path, api_key):
 
 def diarize_transcript(transcript, api_key):
     client = get_client(api_key)
-    prompt = f"""You are a medical conversation analyst. Label each line as DOCTOR or PATIENT.
-Return ONLY:\nDOCTOR: <text>\nPATIENT: <text>\n\nRaw transcript:\n{transcript}"""
+    # FIX 1: Clarified prompt — first speaker (asking questions) = DOCTOR, responding speaker = PATIENT
+    prompt = f"""You are a medical conversation analyst. Label each spoken line as DOCTOR or PATIENT.
+Rules:
+- DOCTOR: the clinician asking questions, examining, giving advice or instructions.
+- PATIENT: the person describing symptoms, answering questions, expressing concerns.
+- Alternate labels based on context, not just turn order.
+- Output ONLY lines in this exact format (one per line, no extra text):
+DOCTOR: <text>
+PATIENT: <text>
+
+Raw transcript:
+{transcript}"""
     r = client.chat.completions.create(model=MODEL, messages=[{"role":"user","content":prompt}], max_tokens=2000)
     return r.choices[0].message.content.strip()
 
@@ -673,7 +769,6 @@ Complaint: {sv.get('chief_complaint')} Symptoms: {sv.get('symptoms',[])}"""
         return [{"code":"—","description":"Could not generate codes","confidence":"low"}]
 
 def generate_followup_reminder(soap, api_key):
-    """HIPAA FIX 1: No patient name in reminder — use generic greeting."""
     client = get_client(api_key)
     pl = soap.get("plan",{})
     prompt = f"""Write a brief friendly SMS-style follow-up reminder (<120 words).
@@ -686,14 +781,13 @@ Follow-up: {pl.get('follow_up')} Tests: {pl.get('investigations',[])} Meds: {pl.
     except Exception as e:
         return f"Could not generate reminder: {e}"
 
-# HIPAA FIX 2: Audit log records action + anonymous session ID only — NO patient name/PHI
 def log_event(action, details=None):
     session_id = st.session_state.get("session_id", "UNKNOWN")
     entry = {
         "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
         "action": action,
-        "session_id": session_id,   # anonymous ID only
-        "patient": "anonymous",     # never store real name
+        "session_id": session_id,
+        "patient": "anonymous",
         **(details or {}),
     }
     st.session_state.audit_log.append(entry)
@@ -720,11 +814,11 @@ def send_via_kno2(pdf_bytes, fax_number):
 def send_via_email(pdf_bytes, to_email, smtp_host, smtp_port, sender_email, sender_password):
     try:
         msg = EmailMessage()
-        msg["Subject"] = f"SOAP Note — {datetime.date.today()}"  # no patient name in subject
+        msg["Subject"] = f"SOAP Note — {datetime.date.today()}"
         msg["From"] = sender_email; msg["To"] = to_email
         msg.set_content(f"SOAP note attached.\nGenerated by BitDoc AI Medical Scribe. Review before clinical use.")
         msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf",
-                           filename=f"soap_{datetime.date.today()}.pdf")  # no patient name in filename
+                           filename=f"soap_{datetime.date.today()}.pdf")
         with smtplib.SMTP_SSL(smtp_host, smtp_port) as smtp:
             smtp.login(sender_email, sender_password); smtp.send_message(msg)
         return {"success":True,"message_id":f"EMAIL-{random.randint(10000,99999)}","provider":"email","error":None}
@@ -797,8 +891,8 @@ if page == "Record & Transcribe":
     with t3:
         st.markdown("<br>", unsafe_allow_html=True)
         transcript_input = st.text_area(
-            "", value=SAMPLE_TRANSCRIPT, height=260,
-            placeholder="Doctor: How are you feeling?\\nPatient: I've had chest pain...",
+            "Transcript input", value=SAMPLE_TRANSCRIPT, height=260,
+            placeholder="Doctor: How are you feeling?\nPatient: I've had chest pain...",
             label_visibility="collapsed")
         st.caption("Sample transcript loaded — click Generate to try it instantly")
 
@@ -810,12 +904,11 @@ if page == "Record & Transcribe":
         clear_clicked = st.button("Clear", use_container_width=True)
 
     if clear_clicked:
-        clear_sensitive_data()  # HIPAA FIX 4
+        clear_sensitive_data()
         st.rerun()
 
     if run_clicked:
         active_audio = recorded_audio or audio_file or None
-        # HIPAA FIX 1: Generate anonymous session ID — never ask for patient name here
         st.session_state.session_id = new_session_id()
         try:
             with st.spinner("Processing consultation…"):
@@ -824,7 +917,6 @@ if page == "Record & Transcribe":
                  st.session_state.soap_markdown, st.session_state.patient_summary,
                  st.session_state.soap_pdf_bytes, st.session_state.soap_dict) = run_pipeline(active_audio, tx)
             st.session_state.pipeline_ran = True
-            # HIPAA FIX 2: log with anonymous ID only
             log_event("GENERATED", {"source": "pipeline"})
             st.success(f"Note generated (Session: {st.session_state.session_id}) — navigate with the sidebar")
         except Exception as exc:
@@ -855,17 +947,42 @@ if page == "Record & Transcribe":
         st.text_area("Raw transcript", value=st.session_state.raw_transcript,
                      height=180, disabled=True, label_visibility="collapsed")
 
+    # FIX 1: Diarization display — proper tag styling + "·" separator between role and text
     if st.session_state.diarized_transcript:
         st.markdown("**Speaker diarization**")
         html = []
         for line in st.session_state.diarized_transcript.strip().splitlines():
-            if line.startswith("DOCTOR:"):
-                html.append(f'<div class="sp-line"><span class="sp-tag doc">Dr</span><span class="sp-speech">{line[7:].strip()}</span></div>')
-            elif line.startswith("PATIENT:"):
-                html.append(f'<div class="sp-line"><span class="sp-tag pat">Pt</span><span class="sp-speech">{line[8:].strip()}</span></div>')
+            line = line.strip()
+            if not line:
+                continue
+            if line.upper().startswith("DOCTOR:"):
+                speech = line[7:].strip()
+                html.append(
+                    f'<div class="sp-line">'
+                    f'<span class="sp-tag doc">Dr</span>'
+                    f'<span class="sp-sep">·</span>'
+                    f'<span class="sp-speech">{speech}</span>'
+                    f'</div>'
+                )
+            elif line.upper().startswith("PATIENT:"):
+                speech = line[8:].strip()
+                html.append(
+                    f'<div class="sp-line">'
+                    f'<span class="sp-tag pat">Pt</span>'
+                    f'<span class="sp-sep">·</span>'
+                    f'<span class="sp-speech">{speech}</span>'
+                    f'</div>'
+                )
             else:
-                html.append(f'<div class="sp-line"><span class="sp-speech" style="color:#000000">{line}</span></div>')
-        st.markdown("<div class='session-list-card' style='padding:10px 12px;'>" + "".join(html) + "</div>", unsafe_allow_html=True)
+                html.append(
+                    f'<div class="sp-line">'
+                    f'<span class="sp-speech" style="padding-left:4px">{line}</span>'
+                    f'</div>'
+                )
+        st.markdown(
+            "<div class='session-list-card' style='padding:10px 14px;'>" + "".join(html) + "</div>",
+            unsafe_allow_html=True
+        )
 
 # ── PAGE 2: SOAP Note ─────────────────────────────────────────────────────────
 elif page == "SOAP Note":
@@ -881,7 +998,6 @@ elif page == "SOAP Note":
         if st.session_state.soap_pdf_bytes:
             if st.download_button("↓  Download PDF", data=st.session_state.soap_pdf_bytes,
                                file_name="soap_note.pdf", mime="application/pdf", use_container_width=True):
-                # HIPAA FIX 4: Clear sensitive data after download
                 log_event("DOWNLOADED")
                 clear_sensitive_data()
                 st.rerun()
@@ -931,7 +1047,6 @@ elif page == "Follow-Up":
     if not st.session_state.pipeline_ran:
         empty_state()
     else:
-        # HIPAA FIX 1: No patient name input — reminder uses generic greeting
         hipaa_banner("Reminder uses a generic greeting (no patient name) to prevent PHI exposure.")
         st.info("Patient name is not collected or stored. The reminder will use a generic greeting to stay HIPAA-safe.")
 
@@ -956,7 +1071,6 @@ elif page == "Send Document":
         hipaa_banner("Recipient details are used for transmission only and not stored in this session.")
         c1, c2 = st.columns(2)
         with c1:
-            # HIPAA FIX 1: No patient name field — use recipient/provider info only
             recipient_org = st.text_input("Recipient organisation", placeholder="City Hospital / Dr. Smith's Clinic")
             fax_number    = st.text_input("Fax number", placeholder="+1XXXXXXXXXX")
         with c2:
@@ -999,14 +1113,12 @@ elif page == "Send Document":
                     st.warning("Please fill in all required fields."); result = None
 
             if result:
-                # HIPAA FIX 2: Log with no PHI — just org type and result
                 log_event("SENT" if result["success"] else "FAILED",
                           {"provider": result.get("provider"),
                            "message_id": result.get("message_id"),
                            "recipient_type": recipient_type})
                 if result["success"]:
                     st.success(f"Transmitted successfully · ID: {result['message_id']}")
-                    # HIPAA FIX 4: Clear session data after successful send
                     clear_sensitive_data()
                     st.info("Session data cleared after transmission for HIPAA compliance.")
                 else:
