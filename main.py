@@ -4,10 +4,8 @@ st.set_page_config(
     page_title="BitDoc · Medical Scribe",
     page_icon="🩺",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
-st.write("FORCE UPDATE TEST")
-
 
 # ── HIPAA FIX 5: Auto-expiry (5-minute inactivity timeout) ───────────────────
 import time
@@ -26,7 +24,6 @@ st.session_state.last_active = time.time()
 
 if "splash_shown" not in st.session_state:
     st.session_state.splash_shown = True
-    # FIX 2: Splash background → white; logo + "BitDoc" text → teal (#12C4B3)
     st.markdown('''
     <style>
     .splash-screen {
@@ -133,7 +130,6 @@ st.markdown("""
 
 [data-testid="stExpanderToggleIcon"] { display: none !important; }
 
-/* Keep Streamlit header controls visually consistent */
 header[data-testid="stHeader"] {
     background: rgba(248, 250, 252, 0.9) !important;
     backdrop-filter: blur(10px);
@@ -151,93 +147,12 @@ header[data-testid="stHeader"] button[kind="header"]:hover {
     border-color: var(--border-hi) !important;
     background: #F8FAFC !important;
 }
-/* Sidebar toggle button - avoid raw Material icon text if the font is unavailable */
-
-/* FIX 3: Sidebar collapse button — hide ALL child text nodes that render raw icon names */
-header[data-testid="stHeader"] button[kind="header"][aria-label*="sidebar" i],
-header[data-testid="stHeader"] button[kind="header"][title*="sidebar" i],
-section[data-testid="stSidebar"] button[kind="header"][aria-label*="sidebar" i],
-section[data-testid="stSidebar"] button[kind="header"][title*="sidebar" i] {
-    min-width: 2.25rem !important;
-    width: 2.25rem !important;
-    height: 2.25rem !important;
-    padding: 0 !important;
-    color: transparent !important;
-    font-size: 0 !important;
-    line-height: 0 !important;
-    text-indent: -9999px !important;
-    white-space: nowrap !important;
-    position: relative !important;
-    overflow: hidden !important;
-}
-section[data-testid="stSidebar"] button[kind="header"][aria-label*="sidebar" i],
-section[data-testid="stSidebar"] button[kind="header"][title*="sidebar" i] {
-    border: 0 !important;
-    background: transparent !important;
-    box-shadow: none !important;
-}
-header[data-testid="stHeader"] button[kind="header"][aria-label*="sidebar" i] *,
-header[data-testid="stHeader"] button[kind="header"][title*="sidebar" i] *,
-section[data-testid="stSidebar"] button[kind="header"][aria-label*="sidebar" i] *,
-section[data-testid="stSidebar"] button[kind="header"][title*="sidebar" i] * {
-    font-size: 0 !important;
-    line-height: 0 !important;
-    color: transparent !important;
-    opacity: 0 !important;
-    visibility: hidden !important;
-    width: 0 !important;
-    height: 0 !important;
-    overflow: hidden !important;
-    display: block !important;
-}
-header[data-testid="stHeader"] button[kind="header"][aria-label*="sidebar" i]::before,
-header[data-testid="stHeader"] button[kind="header"][title*="sidebar" i]::before,
-section[data-testid="stSidebar"] button[kind="header"][aria-label*="sidebar" i]::before,
-section[data-testid="stSidebar"] button[kind="header"][title*="sidebar" i]::before {
-    content: "" !important;
-    position: absolute !important;
-    inset: 0 !important;
-    margin: auto !important;
-    width: 18px !important;
-    height: 2px !important;
-    border-radius: 999px !important;
-    background: var(--sb-ink-2) !important;
-    box-shadow: 0 -6px 0 var(--sb-ink-2), 0 6px 0 var(--sb-ink-2) !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-}
-header[data-testid="stHeader"] button[kind="header"][aria-label*="sidebar" i]:hover::before,
-header[data-testid="stHeader"] button[kind="header"][title*="sidebar" i]:hover::before,
-section[data-testid="stSidebar"] button[kind="header"][aria-label*="sidebar" i]:hover::before,
-section[data-testid="stSidebar"] button[kind="header"][title*="sidebar" i]:hover::before {
-    background: var(--sb-ink) !important;
-    box-shadow: 0 -6px 0 var(--sb-ink), 0 6px 0 var(--sb-ink) !important;
-}
-section[data-testid="stSidebar"] button[kind="header"],
-section[data-testid="stSidebar"] button[kind="header"]:hover,
-section[data-testid="stSidebar"] button[kind="header"]:focus {
-    color: transparent !important;
-    font-size: 0 !important;
-    line-height: 0 !important;
-    text-indent: -9999px !important;
-    text-shadow: none !important;
-}
-section[data-testid="stSidebar"] button[kind="header"]::after,
-section[data-testid="stSidebar"] button[kind="header"]:hover::after,
-section[data-testid="stSidebar"] button[kind="header"]:focus::after {
-    content: "" !important;
-}
-section[data-testid="stSidebar"] > div:first-child {
-    color: transparent !important;
-    font-size: 0 !important;
-    line-height: 0 !important;
-    text-shadow: none !important;
-}
-section[data-testid="stSidebar"] > div:first-child * {
-    text-shadow: none !important;
-}
-section[data-testid="stSidebar"] > div:first-child button[kind="header"]::after {
-    content: "" !important;
+div[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseButton"],
+[data-testid="stSidebarCollapseButton"] button,
+header[data-testid="stHeader"] button[aria-label*="sidebar" i],
+section[data-testid="stSidebar"] button[aria-label*="sidebar" i] {
+    display: none !important;
 }
 
 section[data-testid="stSidebar"] {
@@ -266,18 +181,56 @@ section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
 .brand-name { font-size: 1.25rem; color: var(--sb-ink); letter-spacing: 0.02em; line-height: 1.1; font-weight: 800; }
 .brand-sub { font-size: 0.6rem; color: var(--sb-ink-3); text-transform: uppercase; letter-spacing: 0.14em; font-weight: 700; margin-top: 4px; }
 
-.stRadio > div { gap: 6px !important; }
+.stRadio > div { gap: 8px !important; }
 .stRadio > div > label {
-    background: transparent !important; border: 1px solid transparent !important;
-    border-radius: var(--r-sm) !important; padding: 10px 14px !important;
-    cursor: pointer !important; color: var(--sb-ink-2) !important;
-    font-size: 0.85rem !important; font-weight: 600 !important;
+    background: var(--teal) !important;
+    border: 1px solid var(--teal) !important;
+    border-radius: var(--r-sm) !important;
+    padding: 10px 14px !important;
+    cursor: pointer !important;
+    color: #FFFFFF !important;
+    font-size: 0.85rem !important;
+    font-weight: 700 !important;
     transition: all 0.2s ease !important;
-    display: flex !important; align-items: center !important;
+    display: flex !important;
+    align-items: center !important;
+    opacity: 0.8;
 }
-.stRadio > div > label:hover { background: var(--sb-surface) !important; color: var(--sb-ink) !important; }
-.stRadio > div > label:has(input:checked) { background: rgba(18,196,179,0.1) !important; color: var(--teal) !important; font-weight: 700 !important; }
+.stRadio > div > label:hover {
+    background: var(--teal-dim) !important;
+    border-color: var(--teal-dim) !important;
+    color: #FFFFFF !important;
+    opacity: 1;
+}
+.stRadio > div > label:has(input:checked) {
+    background: var(--teal-dim) !important;
+    border-color: var(--teal-dim) !important;
+    color: #FFFFFF !important;
+    font-weight: 800 !important;
+    opacity: 1;
+    box-shadow: 0 0 0 2px rgba(18,196,179,0.2) !important;
+}
 .stRadio > div > label > div:first-child { display: none !important; }
+
+section[data-testid="stSidebar"] .stRadio > div > label {
+    background: transparent !important;
+    border: 1px solid transparent !important;
+    color: var(--sb-ink-2) !important;
+    opacity: 1;
+    box-shadow: none !important;
+}
+section[data-testid="stSidebar"] .stRadio > div > label:hover {
+    background: var(--sb-surface) !important;
+    border-color: transparent !important;
+    color: var(--sb-ink) !important;
+}
+section[data-testid="stSidebar"] .stRadio > div > label:has(input:checked) {
+    background: rgba(18,196,179,0.1) !important;
+    border-color: transparent !important;
+    color: var(--teal) !important;
+    font-weight: 700 !important;
+    box-shadow: none !important;
+}
 
 .nav-section-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.16em; color: var(--sb-ink-3); padding: 16px 14px 8px; font-weight: 800; }
 
@@ -288,7 +241,6 @@ section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
 .status-dot.ready { background: #10B981; box-shadow: 0 0 8px #10B981; animation: livepulse 2s infinite; }
 .status-dot.empty { background: var(--sb-ink-3); }
 
-/* HIPAA badge */
 .hipaa-badge {
     display: flex; align-items: center; gap: 8px; padding: 8px 12px;
     background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.2);
@@ -321,6 +273,17 @@ section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
 .stButton > button[kind="primary"]:hover { background: var(--teal-dim) !important; border-color: var(--teal-dim) !important; }
 [data-testid="stHorizontalBlock"] > div:nth-child(2) .stButton > button { background: var(--ink) !important; color: white !important; border: 1px solid var(--ink) !important; }
 [data-testid="stHorizontalBlock"] > div:nth-child(2) .stButton > button:hover { background: var(--ink-2) !important; }
+.stDownloadButton > button {
+    background: var(--teal) !important;
+    color: #FFFFFF !important;
+    border: 1px solid var(--teal) !important;
+    font-weight: 800 !important;
+}
+.stDownloadButton > button:hover {
+    background: var(--teal-dim) !important;
+    border-color: var(--teal-dim) !important;
+    color: #FFFFFF !important;
+}
 
 .metric-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 18px 16px; text-align: left; transition: border-color 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
 .metric-card:hover { border-color: var(--border-hi); }
@@ -334,7 +297,6 @@ label, .stSelectbox label { color: var(--ink-3) !important; font-size: 0.7rem !i
 
 .session-list-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); margin-top: 14px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
 
-/* FIX 1: Diarization speaker tags — Doctor = teal, Patient = blue; clear separator */
 .sp-line {
     display: flex;
     align-items: flex-start;
@@ -395,6 +357,54 @@ label, .stSelectbox label { color: var(--ink-3) !important; font-size: 0.7rem !i
 .hipaa-banner { background: rgba(16,185,129,0.05); border: 1px solid rgba(16,185,129,0.25); border-radius: 9px; padding: 10px 16px; font-size: 0.82rem; color: #059669; margin-bottom: 12px; }
 .disclaimer { background: rgba(18,196,179,0.03); border: 1px solid rgba(18,196,179,0.12); border-radius: 9px; padding: 14px 18px; font-size: 0.78rem; color: var(--ink-3); margin-top: 28px; }
 .disclaimer strong { color: var(--teal-dim); text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.08em; }
+.bd-loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(11, 18, 32, 0.55);
+    backdrop-filter: blur(3px);
+    z-index: 999998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.bd-loading-card {
+    background: #FFFFFF;
+    border: 1px solid var(--border-hi);
+    border-radius: 14px;
+    width: min(520px, 92vw);
+    padding: 20px 22px;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.22);
+}
+.bd-loading-title {
+    margin: 0;
+    color: var(--ink);
+    font-size: 1rem;
+    font-weight: 800;
+}
+.bd-loading-sub {
+    margin: 6px 0 0;
+    color: var(--ink-3);
+    font-size: 0.85rem;
+}
+.bd-loading-track {
+    margin-top: 14px;
+    width: 100%;
+    height: 8px;
+    background: #E2E8F0;
+    border-radius: 999px;
+    overflow: hidden;
+}
+.bd-loading-bar {
+    width: 38%;
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #12C4B3 0%, #0D9488 100%);
+    animation: bdSlide 1.1s ease-in-out infinite alternate;
+}
+@keyframes bdSlide {
+    from { transform: translateX(0); }
+    to { transform: translateX(160%); }
+}
 
 [data-testid="stHorizontalBlock"] { gap: 12px !important; }
 </style>
@@ -499,6 +509,15 @@ with st.sidebar:
 import base64, csv, datetime, io, json, os, random, smtplib, tempfile
 from email.message import EmailMessage
 import requests, openai
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.lib.units import inch
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
+    HRFlowable, KeepTogether
+)
 
 MODEL              = "openai/gpt-4o-mini"
 OPENROUTER_API_KEY = st.secrets.get("OPENROUTER_API_KEY", "")
@@ -543,7 +562,6 @@ def transcribe_with_whisper(audio_path, api_key):
 
 def diarize_transcript(transcript, api_key):
     client = get_client(api_key)
-    # FIX 1: Clarified prompt — first speaker (asking questions) = DOCTOR, responding speaker = PATIENT
     prompt = f"""You are a medical conversation analyst. Label each spoken line as DOCTOR or PATIENT.
 Rules:
 - DOCTOR: the clinician asking questions, examining, giving advice or instructions.
@@ -620,117 +638,278 @@ def format_soap_markdown(soap):
 **Instructions:** {v(p.get('instructions'))}
 """
 
+# ══════════════════════════════════════════════════════════════════════════════
+# PDF GENERATION — BitDoc themed, BITDOC header + footer on every page
+# ══════════════════════════════════════════════════════════════════════════════
+
 def create_soap_pdf_bytes(soap):
-    from reportlab.lib.pagesizes import letter
-    from reportlab.lib import colors
-    from reportlab.lib.units import inch
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.enums import TA_CENTER
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, KeepTogether
+    s = soap.get("subjective", {})
+    o = soap.get("objective", {})
+    a = soap.get("assessment", {})
+    p = soap.get("plan", {})
 
-    s,o,a,p = soap.get("subjective",{}),soap.get("objective",{}),soap.get("assessment",{}),soap.get("plan",{})
-    def val(x): return str(x).strip() if x not in (None,"",[]) else "Not documented"
-    def bul(items):
-        if not items: return [("• Not documented",)]
-        return [(f"• {str(i).strip()}",) for i in items if str(i).strip()]
+    # ── Brand palette matching app CSS vars
+    DARK_BG    = colors.HexColor("#0B1220")
+    TEAL       = colors.HexColor("#12C4B3")
+    TEAL_DIM   = colors.HexColor("#0D9488")
+    INK        = colors.HexColor("#F8FAFC")
+    INK3       = colors.HexColor("#64748B")
+    CARD_BG    = colors.HexColor("#FFFFFF")
+    CARD_BDR   = colors.HexColor("#E2E8F0")
+    AMBER_DIM  = colors.HexColor("#D97706")
+    SECTION_BG = colors.HexColor("#0F172A")
 
-    DARK = colors.HexColor("#0C0D0F"); PANEL = colors.HexColor("#18191C")
-    GOLD = colors.HexColor("#C9A96E"); GOLD_DIM = colors.HexColor("#8A6E3E")
-    INK  = colors.HexColor("#F0EDE8"); INK2 = colors.HexColor("#A09A91")
-    BORDER = colors.HexColor("#2A2B2E"); WHITE = colors.white
-    GREEN = colors.HexColor("#059669"); BLUE = colors.HexColor("#1D4ED8")
+    W, H = letter
+
+    def val(x):
+        return str(x).strip() if x not in (None, "", []) else "Not documented"
+
+    def bullet_items(items):
+        if not items:
+            return [Paragraph("• Not documented", s_bul)]
+        return [Paragraph(f"• {str(i).strip()}", s_bul) for i in items if str(i).strip()]
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=letter,
-        leftMargin=0.75*inch, rightMargin=0.75*inch,
-        topMargin=0.6*inch, bottomMargin=0.7*inch,
-        title="SOAP Note — BitDoc")
-    base = getSampleStyleSheet()
-    def ps(name, **kw): return ParagraphStyle(name, parent=base["Normal"], **kw)
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter,
+        leftMargin=0.55 * inch, rightMargin=0.55 * inch,
+        topMargin=0.90 * inch, bottomMargin=0.65 * inch,
+        title="SOAP Note — BitDoc",
+        author="BitDoc AI Medical Scribe",
+    )
 
-    s_ht  = ps("HT", fontSize=20,leading=24,textColor=INK,fontName="Helvetica-Bold",alignment=TA_CENTER)
-    s_sub = ps("SB", fontSize=8, leading=12,textColor=INK2,fontName="Helvetica",alignment=TA_CENTER)
-    s_sh  = ps("SH", fontSize=9, leading=13,textColor=WHITE,fontName="Helvetica-Bold")
-    s_lbl = ps("LB", fontSize=7, leading=10,textColor=GOLD,fontName="Helvetica-Bold",spaceBefore=6,spaceAfter=1)
-    s_bod = ps("BD", fontSize=9, leading=14,textColor=INK2,fontName="Helvetica",spaceAfter=3)
-    s_bul = ps("BU", fontSize=9, leading=14,textColor=INK2,fontName="Helvetica",leftIndent=8,spaceAfter=2)
-    s_wrn = ps("WN", fontSize=7.5,leading=11,textColor=colors.HexColor("#D4A017"),fontName="Helvetica-Oblique")
-    s_ftr = ps("FT", fontSize=7, leading=10,textColor=INK2,fontName="Helvetica",alignment=TA_CENTER)
+    # ── Canvas callback: draws branded header + footer on every page
+    def draw_page_chrome(canvas, doc):
+        canvas.saveState()
 
-    today = datetime.date.today().strftime("%B %d, %Y")
+        # ── HEADER: dark navy bar across the top
+        canvas.setFillColor(DARK_BG)
+        canvas.rect(0, H - 0.72 * inch, W, 0.72 * inch, fill=1, stroke=0)
 
-    def sec(badge, title, accent=DARK):
-        b = Paragraph(f"<b>{badge}</b>", ParagraphStyle("bx",fontSize=11,textColor=GOLD,fontName="Helvetica-Bold",alignment=TA_CENTER))
-        h = Paragraph(title, s_sh)
-        t = Table([[b,h]], colWidths=[0.38*inch,None])
+        # Teal left accent stripe
+        canvas.setFillColor(TEAL)
+        canvas.rect(0, H - 0.72 * inch, 0.22 * inch, 0.72 * inch, fill=1, stroke=0)
+
+        # "BITDOC" wordmark (left)
+        canvas.setFillColor(TEAL)
+        canvas.setFont("Helvetica-Bold", 14)
+        canvas.drawString(0.36 * inch, H - 0.43 * inch, "BITDOC")
+
+        # "AI Medical Scribe" subtitle under wordmark
+        canvas.setFillColor(INK3)
+        canvas.setFont("Helvetica", 7)
+        canvas.drawString(0.36 * inch, H - 0.585 * inch, "AI Medical Scribe")
+
+        # "SOAP NOTE" centered
+        canvas.setFillColor(INK)
+        canvas.setFont("Helvetica-Bold", 11)
+        canvas.drawCentredString(W / 2, H - 0.435 * inch, "SOAP NOTE")
+
+        # Teal underline accent beneath centered title
+        canvas.setStrokeColor(TEAL)
+        canvas.setLineWidth(1.2)
+        title_w = 72  # approx width of "SOAP NOTE" at 11pt
+        canvas.line(W / 2 - 36, H - 0.50 * inch, W / 2 + 36, H - 0.50 * inch)
+
+        # Date + page number (right)
+        canvas.setFillColor(INK3)
+        canvas.setFont("Helvetica", 7.5)
+        today_str = datetime.date.today().strftime("%b %d, %Y")
+        canvas.drawRightString(W - 0.45 * inch, H - 0.385 * inch, today_str)
+        canvas.drawRightString(W - 0.45 * inch, H - 0.545 * inch, f"Page {doc.page}")
+
+        # ── FOOTER: dark navy bar across the bottom
+        canvas.setFillColor(DARK_BG)
+        canvas.rect(0, 0, W, 0.42 * inch, fill=1, stroke=0)
+
+        # Thin teal top line on footer
+        canvas.setFillColor(TEAL)
+        canvas.rect(0, 0.42 * inch, W, 0.025 * inch, fill=1, stroke=0)
+
+        # Thin teal bottom line (very base)
+        canvas.setFillColor(TEAL)
+        canvas.rect(0, 0, W, 0.025 * inch, fill=1, stroke=0)
+
+        # Footer disclaimer text
+        canvas.setFillColor(INK3)
+        canvas.setFont("Helvetica", 6.5)
+        canvas.drawCentredString(
+            W / 2, 0.155 * inch,
+            "BitDoc AI Medical Scribe  ·  AI-generated draft — must be reviewed by a licensed clinician before clinical use"
+        )
+
+        canvas.restoreState()
+
+    # ── Paragraph styles
+    base_styles = getSampleStyleSheet()
+
+    def ps(name, **kw):
+        return ParagraphStyle(name, parent=base_styles["Normal"], **kw)
+
+    s_lbl = ps("LBL",
+        fontSize=6.5, leading=9,
+        textColor=INK3, fontName="Helvetica-Bold",
+        spaceBefore=0, spaceAfter=2,
+    )
+    s_val = ps("VAL",
+        fontSize=9, leading=13.5,
+        textColor=colors.HexColor("#1E293B"), fontName="Helvetica",
+        spaceAfter=4,
+    )
+    s_bul = ps("BUL",
+        fontSize=9, leading=13,
+        textColor=colors.HexColor("#1E293B"), fontName="Helvetica",
+        leftIndent=4, spaceAfter=2,
+    )
+    s_warn = ps("WRN",
+        fontSize=7.5, leading=11,
+        textColor=AMBER_DIM, fontName="Helvetica-Oblique",
+        alignment=TA_CENTER,
+    )
+
+    # ── Section header: dark badge letter + title on dark bar, teal underline
+    def section_header(badge, title, accent=SECTION_BG):
+        badge_para = Paragraph(
+            f"<b>{badge}</b>",
+            ParagraphStyle("BDG", fontSize=13, textColor=TEAL,
+                           fontName="Helvetica-Bold", alignment=TA_CENTER),
+        )
+        title_para = Paragraph(
+            f"<b>{title}</b>",
+            ParagraphStyle("TTL", fontSize=9.5, textColor=INK,
+                           fontName="Helvetica-Bold", alignment=TA_LEFT),
+        )
+        t = Table([[badge_para, title_para]], colWidths=[0.42 * inch, None])
         t.setStyle(TableStyle([
-            ("BACKGROUND",(0,0),(-1,-1),accent),("VALIGN",(0,0),(-1,-1),"MIDDLE"),
-            ("LEFTPADDING",(0,0),(0,0),7),("RIGHTPADDING",(0,0),(0,0),5),
-            ("LEFTPADDING",(1,0),(1,0),10),
-            ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),
-            ("ROUNDEDCORNERS",[5]),("LINEBELOW",(0,0),(-1,-1),0.5,GOLD_DIM),
+            ("BACKGROUND",    (0, 0), (-1, -1), accent),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING",   (0, 0), (0,  0),  6),
+            ("RIGHTPADDING",  (0, 0), (0,  0),  4),
+            ("LEFTPADDING",   (1, 0), (1,  0),  12),
+            ("TOPPADDING",    (0, 0), (-1, -1), 9),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
+            ("LINEBELOW",     (0, 0), (-1, -1), 1.2, TEAL),
         ]))
         return t
 
-    def card(*elems):
-        rows = [[e] for e in elems]
+    # ── White card with stacked label / value pairs
+    def info_card(pairs):
+        rows = []
+        for lbl, value in pairs:
+            rows.append([Paragraph(lbl, s_lbl)])
+            rows.append([Paragraph(val(value), s_val)])
         t = Table(rows, colWidths=[doc.width])
         t.setStyle(TableStyle([
-            ("BACKGROUND",(0,0),(-1,-1),PANEL),
-            ("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6),
-            ("LEFTPADDING",(0,0),(-1,-1),12),("RIGHTPADDING",(0,0),(-1,-1),12),
-            ("ROUNDEDCORNERS",[5]),("BOX",(0,0),(-1,-1),0.5,BORDER),
+            ("BACKGROUND",    (0, 0), (-1, -1), CARD_BG),
+            ("BOX",           (0, 0), (-1, -1), 0.5, CARD_BDR),
+            ("TOPPADDING",    (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 12),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 12),
         ]))
         return t
 
-    def bcard(items):
-        return card(*[Paragraph(t, s_bul) for (t,) in bul(items)])
+    # ── White card with optional label + bullet list
+    def bullet_card(items, label=None):
+        content = []
+        if label:
+            content.append(Paragraph(label, s_lbl))
+        content += bullet_items(items)
+        t = Table([[c] for c in content], colWidths=[doc.width])
+        t.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, -1), CARD_BG),
+            ("BOX",           (0, 0), (-1, -1), 0.5, CARD_BDR),
+            ("TOPPADDING",    (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 12),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 12),
+        ]))
+        return t
 
-    def rule(): return HRFlowable(width="100%",thickness=0.5,color=BORDER,spaceAfter=8,spaceBefore=5)
+    def rule():
+        return HRFlowable(
+            width="100%", thickness=0.5, color=CARD_BDR,
+            spaceAfter=10, spaceBefore=10,
+        )
 
+    # ── Build story
     story = []
-    h = Table([[Paragraph("SOAP NOTE",s_ht)],[Paragraph("BitDoc · AI Medical Scribe",s_sub)],[Paragraph(today,s_sub)]],colWidths=[doc.width])
-    h.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),DARK),("TOPPADDING",(0,0),(-1,-1),10),
-        ("BOTTOMPADDING",(0,0),(-1,-1),10),("LEFTPADDING",(0,0),(-1,-1),16),("ROUNDEDCORNERS",[7]),
-        ("BOX",(0,0),(-1,-1),1,colors.HexColor("#2A2B2E"))]))
-    story += [h, Spacer(1,8)]
 
-    wt = Table([[Paragraph("⚠  AI draft — verify before clinical use or sharing",s_wrn)]],colWidths=[doc.width])
-    wt.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),colors.HexColor("#1A1500")),
-        ("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7),
-        ("LEFTPADDING",(0,0),(-1,-1),12),("ROUNDEDCORNERS",[4]),
-        ("BOX",(0,0),(-1,-1),0.5,colors.HexColor("#4A3800"))]))
-    story += [wt, Spacer(1,14)]
+    # Warning banner (amber)
+    warn_t = Table(
+        [[Paragraph("⚠  AI-generated draft — verify all details before clinical use or sharing", s_warn)]],
+        colWidths=[doc.width],
+    )
+    warn_t.setStyle(TableStyle([
+        ("BACKGROUND",    (0, 0), (-1, -1), colors.HexColor("#FFFBEB")),
+        ("BOX",           (0, 0), (-1, -1), 0.5, colors.HexColor("#FCD34D")),
+        ("TOPPADDING",    (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING",   (0, 0), (-1, -1), 14),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 14),
+    ]))
+    story.append(warn_t)
+    story.append(Spacer(1, 14))
 
-    sval = soap.get("subjective",{})
-    oval = soap.get("objective",{})
-    aval = soap.get("assessment",{})
-    pval = soap.get("plan",{})
+    # ── S — SUBJECTIVE
+    story.append(KeepTogether([
+        section_header("S", "SUBJECTIVE"),
+        Spacer(1, 8),
+        info_card([
+            ("Chief Complaint",              s.get("chief_complaint")),
+            ("History of Present Illness",   s.get("history_of_present_illness")),
+        ]),
+        Spacer(1, 8),
+        info_card([
+            ("Duration", s.get("duration")),
+            ("Severity", s.get("severity")),
+        ]),
+        Spacer(1, 8),
+        bullet_card(s.get("symptoms", []), label="Symptoms"),
+    ]))
+    story.append(Spacer(1, 10))
+    story.append(rule())
 
-    story += [KeepTogether([sec("S","SUBJECTIVE"),Spacer(1,6),
-        card(Paragraph("Chief Complaint",s_lbl),Paragraph(val(sval.get("chief_complaint")),s_bod),
-             Paragraph("History of Present Illness",s_lbl),Paragraph(val(sval.get("history_of_present_illness")),s_bod)),Spacer(1,6)]),
-        Paragraph("Symptoms",s_lbl), bcard(sval.get("symptoms",[])), Spacer(1,12), rule()]
+    # ── O — OBJECTIVE
+    story.append(KeepTogether([
+        section_header("O", "OBJECTIVE", accent=colors.HexColor("#0A1F1E")),
+        Spacer(1, 8),
+        info_card([
+            ("Vitals",               o.get("vitals")),
+            ("Physical Examination", o.get("physical_exam")),
+        ]),
+        Spacer(1, 8),
+        bullet_card(o.get("observations", []), label="Clinical Observations"),
+    ]))
+    story.append(Spacer(1, 10))
+    story.append(rule())
 
-    story += [KeepTogether([sec("O","OBJECTIVE"),Spacer(1,6),
-        card(Paragraph("Vitals",s_lbl),Paragraph(val(oval.get("vitals")),s_bod),
-             Paragraph("Physical Examination",s_lbl),Paragraph(val(oval.get("physical_exam")),s_bod)),Spacer(1,6)]),
-        Paragraph("Clinical Observations",s_lbl), bcard(oval.get("observations",[])), Spacer(1,12), rule()]
+    # ── A — ASSESSMENT
+    story.append(KeepTogether([
+        section_header("A", "ASSESSMENT", accent=colors.HexColor("#0C1A0F")),
+        Spacer(1, 8),
+        info_card([("Primary Diagnosis", a.get("diagnosis"))]),
+        Spacer(1, 8),
+        bullet_card(a.get("differential", []), label="Differential Diagnoses"),
+    ]))
+    story.append(Spacer(1, 10))
+    story.append(rule())
 
-    story += [KeepTogether([sec("A","ASSESSMENT",colors.HexColor("#0F1A0E")),Spacer(1,6),
-        card(Paragraph("Primary Diagnosis",s_lbl),Paragraph(val(aval.get("diagnosis")),s_bod)),Spacer(1,6)]),
-        Paragraph("Differential Diagnoses",s_lbl), bcard(aval.get("differential",[])), Spacer(1,12), rule()]
+    # ── P — PLAN
+    story.append(section_header("P", "PLAN", accent=colors.HexColor("#0E0F1A")))
+    story.append(Spacer(1, 8))
+    story.append(bullet_card(p.get("investigations", []), label="Investigations / Orders"))
+    story.append(Spacer(1, 8))
+    story.append(bullet_card(p.get("medications", []),    label="Medications"))
+    story.append(Spacer(1, 8))
+    story.append(info_card([
+        ("Follow-Up",            p.get("follow_up")),
+        ("Patient Instructions", p.get("instructions")),
+    ]))
 
-    story += [sec("P","PLAN",colors.HexColor("#0E0F1A")), Spacer(1,6),
-        Paragraph("Investigations / Orders",s_lbl), bcard(pval.get("investigations",[])), Spacer(1,5),
-        Paragraph("Medications",s_lbl), bcard(pval.get("medications",[])), Spacer(1,5),
-        card(Paragraph("Follow-Up",s_lbl),Paragraph(val(pval.get("follow_up")),s_bod),
-             Paragraph("Patient Instructions",s_lbl),Paragraph(val(pval.get("instructions")),s_bod)),
-        Spacer(1,20), rule(),
-        Paragraph(f"BitDoc AI Medical Scribe  ·  {today}  ·  All AI-generated notes must be reviewed by a licensed clinician before clinical use",s_ftr)]
-
-    doc.build(story)
+    doc.build(story, onFirstPage=draw_page_chrome, onLaterPages=draw_page_chrome)
     return buf.getvalue()
+
 
 def run_pipeline(audio_file, transcript_text):
     if not OPENROUTER_API_KEY.strip():
@@ -781,22 +960,47 @@ Follow-up: {pl.get('follow_up')} Tests: {pl.get('investigations',[])} Meds: {pl.
     except Exception as e:
         return f"Could not generate reminder: {e}"
 
+AUDIT_LOG_FIELDS = [
+    "timestamp", "action", "session_id", "patient", "source",
+    "provider", "message_id", "recipient_type", "attempts",
+    "status", "error", "meta",
+]
+
+def _audit_val(value):
+    if value is None:
+        return "—"
+    if isinstance(value, (dict, list, tuple)):
+        return json.dumps(value, ensure_ascii=True)
+    text = str(value).strip()
+    return text if text else "—"
+
 def log_event(action, details=None):
     session_id = st.session_state.get("session_id", "UNKNOWN")
-    entry = {
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "action": action,
-        "session_id": session_id,
-        "patient": "anonymous",
-        **(details or {}),
-    }
+    details = details or {}
+    action_text = str(action).strip().upper() if action is not None else "UNKNOWN"
+    entry = {k: "—" for k in AUDIT_LOG_FIELDS}
+    entry.update({
+        "timestamp":  datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "action":     action_text or "UNKNOWN",
+        "session_id": _audit_val(session_id if session_id else "UNKNOWN"),
+        "patient":    "anonymous",
+    })
+    allowed = set(AUDIT_LOG_FIELDS) - {"timestamp", "action", "session_id", "patient"}
+    extras = {}
+    for key, value in details.items():
+        if key in allowed:
+            entry[key] = _audit_val(value)
+        else:
+            extras[key] = value
+    if extras:
+        entry["meta"] = _audit_val(extras)
     st.session_state.audit_log.append(entry)
 
 def send_via_mock(pdf_bytes, recipient):
     time.sleep(0.5)
     ok = random.random() > 0.2
-    return {"success":ok,"message_id":f"MOCK-{random.randint(10000,99999)}","provider":"mock",
-            "error":None if ok else "Simulated failure"}
+    return {"success": ok, "message_id": f"MOCK-{random.randint(10000,99999)}", "provider": "mock",
+            "error": None if ok else "Simulated failure"}
 
 def send_via_kno2(pdf_bytes, fax_number):
     try:
@@ -811,19 +1015,24 @@ def send_via_kno2(pdf_bytes, fax_number):
     except Exception as e:
         return {"success":False,"message_id":None,"provider":"kno2","error":str(e)}
 
-def send_via_email(pdf_bytes, to_email, smtp_host, smtp_port, sender_email, sender_password):
+def send_via_email(pdf_bytes, to_email, smtp_host, smtp_port, sender_email, sender_password,
+                   subject=None, body=None, attach_pdf=True, attachment_name=None,
+                   provider_tag="email"):
     try:
         msg = EmailMessage()
-        msg["Subject"] = f"SOAP Note — {datetime.date.today()}"
+        msg["Subject"] = subject or f"SOAP Note — {datetime.date.today()}"
         msg["From"] = sender_email; msg["To"] = to_email
-        msg.set_content(f"SOAP note attached.\nGenerated by BitDoc AI Medical Scribe. Review before clinical use.")
-        msg.add_attachment(pdf_bytes, maintype="application", subtype="pdf",
-                           filename=f"soap_{datetime.date.today()}.pdf")
+        msg.set_content(body or "SOAP note attached.\nGenerated by BitDoc AI Medical Scribe. Review before clinical use.")
+        if attach_pdf and pdf_bytes:
+            msg.add_attachment(
+                pdf_bytes, maintype="application", subtype="pdf",
+                filename=attachment_name or f"soap_{datetime.date.today()}.pdf",
+            )
         with smtplib.SMTP_SSL(smtp_host, smtp_port) as smtp:
             smtp.login(sender_email, sender_password); smtp.send_message(msg)
-        return {"success":True,"message_id":f"EMAIL-{random.randint(10000,99999)}","provider":"email","error":None}
+        return {"success":True,"message_id":f"EMAIL-{random.randint(10000,99999)}","provider":provider_tag,"error":None}
     except Exception as e:
-        return {"success":False,"message_id":None,"provider":"email","error":str(e)}
+        return {"success":False,"message_id":None,"provider":provider_tag,"error":str(e)}
 
 def send_with_retry(send_fn, retries=2, delay=1.0, **kwargs):
     last = {}
@@ -833,6 +1042,11 @@ def send_with_retry(send_fn, retries=2, delay=1.0, **kwargs):
         last = r
         if i < retries: time.sleep(delay)
     last["attempts"] = retries; return last
+
+def clear_transient_contact_fields():
+    for key in ["patient_email_input","patient_phone_input","sender_email_input","sender_password_input"]:
+        if key in st.session_state:
+            st.session_state[key] = ""
 
 # ── Page helpers ───────────────────────────────────────────────────────────────
 def page_header(icon, title, subtitle=""):
@@ -854,6 +1068,17 @@ def empty_state(msg="Generate a note first to use this page."):
 
 def hipaa_banner(msg):
     st.markdown(f'<div class="hipaa-banner">🔒 {msg}</div>', unsafe_allow_html=True)
+
+def show_loading_screen(message="Generating SOAP note..."):
+    st.markdown(f"""
+    <div class="bd-loading-overlay">
+        <div class="bd-loading-card">
+            <p class="bd-loading-title">{message}</p>
+            <p class="bd-loading-sub">Transcribing, structuring SOAP Notes. Please wait.</p>
+            <div class="bd-loading-track"><div class="bd-loading-bar"></div></div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PAGES
@@ -910,7 +1135,10 @@ if page == "Record & Transcribe":
     if run_clicked:
         active_audio = recorded_audio or audio_file or None
         st.session_state.session_id = new_session_id()
+        loading_slot = st.empty()
         try:
+            with loading_slot:
+                show_loading_screen("Generating SOAP note...")
             with st.spinner("Processing consultation…"):
                 tx = transcript_input if "transcript_input" in dir() else SAMPLE_TRANSCRIPT
                 (st.session_state.raw_transcript, st.session_state.diarized_transcript,
@@ -921,6 +1149,8 @@ if page == "Record & Transcribe":
             st.success(f"Note generated (Session: {st.session_state.session_id}) — navigate with the sidebar")
         except Exception as exc:
             st.error(str(exc))
+        finally:
+            loading_slot.empty()
 
     words = len(st.session_state.raw_transcript.split()) if st.session_state.raw_transcript else 0
     duration = f"{max(1, words // 150)}m" if words else "—"
@@ -947,7 +1177,6 @@ if page == "Record & Transcribe":
         st.text_area("Raw transcript", value=st.session_state.raw_transcript,
                      height=180, disabled=True, label_visibility="collapsed")
 
-    # FIX 1: Diarization display — proper tag styling + "·" separator between role and text
     if st.session_state.diarized_transcript:
         st.markdown("**Speaker diarization**")
         html = []
@@ -1068,7 +1297,13 @@ elif page == "Send Document":
     if not st.session_state.soap_pdf_bytes:
         empty_state()
     else:
-        hipaa_banner("Recipient details are used for transmission only and not stored in this session.")
+        hipaa_banner("Contact details are used only for transmission, never written to audit logs, and cleared after send.")
+        send_target = st.radio(
+            "Send target",
+            ["Organization only", "Patient only", "Both"],
+            horizontal=True
+        )
+
         c1, c2 = st.columns(2)
         with c1:
             recipient_org = st.text_input("Recipient organisation", placeholder="City Hospital / Dr. Smith's Clinic")
@@ -1078,51 +1313,130 @@ elif page == "Send Document":
             recipient_type = st.selectbox("Recipient type",
                 ["Hospital / Specialist", "Lab", "Insurance", "Clinic"])
 
+        if send_target in ("Patient only", "Both"):
+            st.markdown("<br>", unsafe_allow_html=True)
+            p1, p2 = st.columns(2)
+            with p1:
+                patient_email = st.text_input(
+                    "Patient email (transient only)",
+                    placeholder="patient@example.com",
+                    key="patient_email_input",
+                )
+            with p2:
+                patient_phone = st.text_input(
+                    "Patient phone (optional, not sent here)",
+                    placeholder="+1XXXXXXXXXX",
+                    key="patient_phone_input",
+                )
+            attach_patient_pdf = st.checkbox("Attach SOAP PDF in patient email", value=False)
+        else:
+            patient_email = ""
+            patient_phone = ""
+            attach_patient_pdf = False
+
         st.markdown("<br>", unsafe_allow_html=True)
         method = st.radio("Transmission method", ["Mock (test)","Kno2 Fax","Email"], horizontal=True)
 
-        if method == "Email":
+        needs_email_auth = method == "Email" or send_target in ("Patient only", "Both")
+        if needs_email_auth:
             st.markdown("<br>", unsafe_allow_html=True)
             e1, e2 = st.columns(2)
             with e1:
                 smtp_host    = st.text_input("SMTP host", value="smtp.gmail.com")
-                sender_email = st.text_input("Sender email")
+                sender_email = st.text_input("Sender email", key="sender_email_input")
             with e2:
                 smtp_port       = st.number_input("SMTP port", value=465)
-                sender_password = st.text_input("App password", type="password")
+                sender_password = st.text_input("App password", type="password", key="sender_password_input")
         else:
             smtp_host=smtp_port=sender_email=sender_password=""
 
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("✦  Send Document", type="primary", use_container_width=True):
+            org_result = None
+            patient_result = None
             with st.spinner("Transmitting…"):
-                if method == "Mock (test)":
-                    result = send_with_retry(send_via_mock, retries=2,
-                                             pdf_bytes=st.session_state.soap_pdf_bytes,
-                                             recipient=recipient_org)
-                elif method == "Kno2 Fax":
-                    result = send_via_kno2(st.session_state.soap_pdf_bytes, fax_number)
-                elif method == "Email" and sender_email:
-                    result = send_with_retry(send_via_email, retries=2,
-                                             pdf_bytes=st.session_state.soap_pdf_bytes,
-                                             to_email=email_addr or sender_email,
-                                             smtp_host=smtp_host, smtp_port=int(smtp_port),
-                                             sender_email=sender_email,
-                                             sender_password=sender_password)
-                else:
-                    st.warning("Please fill in all required fields."); result = None
+                send_org     = send_target in ("Organization only", "Both")
+                send_patient = send_target in ("Patient only", "Both")
 
-            if result:
-                log_event("SENT" if result["success"] else "FAILED",
-                          {"provider": result.get("provider"),
-                           "message_id": result.get("message_id"),
-                           "recipient_type": recipient_type})
-                if result["success"]:
-                    st.success(f"Transmitted successfully · ID: {result['message_id']}")
-                    clear_sensitive_data()
-                    st.info("Session data cleared after transmission for HIPAA compliance.")
+                if send_org:
+                    if method == "Mock (test)":
+                        org_result = send_with_retry(
+                            send_via_mock, retries=2,
+                            pdf_bytes=st.session_state.soap_pdf_bytes,
+                            recipient=recipient_org
+                        )
+                    elif method == "Kno2 Fax":
+                        org_result = send_via_kno2(st.session_state.soap_pdf_bytes, fax_number)
+                    elif method == "Email" and sender_email:
+                        org_result = send_with_retry(
+                            send_via_email, retries=2,
+                            pdf_bytes=st.session_state.soap_pdf_bytes,
+                            to_email=email_addr or sender_email,
+                            smtp_host=smtp_host, smtp_port=int(smtp_port),
+                            sender_email=sender_email, sender_password=sender_password,
+                            provider_tag="email_org"
+                        )
+                    else:
+                        st.warning("Please fill in all required organization fields.")
+
+                if send_patient:
+                    if not patient_email or not sender_email or not sender_password:
+                        st.warning("Patient send requires patient email and sender email/app password.")
+                    else:
+                        reminder_text = st.session_state.get("followup_reminder", "")
+                        summary_text  = st.session_state.get("patient_summary", "")
+                        patient_body  = (
+                            "Hello,\n\n"
+                            "Here is your visit follow-up from BitDoc.\n\n"
+                            f"{summary_text or 'Your visit summary is ready.'}\n\n"
+                            f"{reminder_text if reminder_text else ''}\n\n"
+                            "If symptoms worsen, contact your care team."
+                        )
+                        patient_result = send_with_retry(
+                            send_via_email, retries=2,
+                            pdf_bytes=st.session_state.soap_pdf_bytes if attach_patient_pdf else b"",
+                            to_email=patient_email,
+                            smtp_host=smtp_host, smtp_port=int(smtp_port),
+                            sender_email=sender_email, sender_password=sender_password,
+                            subject=f"Your Visit Summary — {datetime.date.today()}",
+                            body=patient_body,
+                            attach_pdf=attach_patient_pdf,
+                            attachment_name=f"visit_note_{datetime.date.today()}.pdf",
+                            provider_tag="email_patient"
+                        )
+
+            if org_result:
+                log_event("SENT" if org_result["success"] else "FAILED",
+                          {"provider": org_result.get("provider"),
+                           "message_id": org_result.get("message_id"),
+                           "recipient_type": recipient_type,
+                           "attempts": org_result.get("attempts"),
+                           "status": "success" if org_result.get("success") else "failed",
+                           "error": org_result.get("error")})
+                if org_result["success"]:
+                    st.success(f"Organization transmission successful · ID: {org_result['message_id']}")
                 else:
-                    st.error(f"Transmission failed · {result.get('error','Unknown error')}")
+                    st.error(f"Organization transmission failed · {org_result.get('error','Unknown error')}")
+
+            if patient_result:
+                log_event("SENT" if patient_result["success"] else "FAILED",
+                          {"provider": patient_result.get("provider"),
+                           "message_id": patient_result.get("message_id"),
+                           "recipient_type": "Patient",
+                           "attempts": patient_result.get("attempts"),
+                           "status": "success" if patient_result.get("success") else "failed",
+                           "error": patient_result.get("error")})
+                if patient_result["success"]:
+                    st.success(f"Patient message sent · ID: {patient_result['message_id']}")
+                else:
+                    st.error(f"Patient message failed · {patient_result.get('error','Unknown error')}")
+
+            clear_transient_contact_fields()
+
+            sent_any = (org_result and org_result.get("success")) or (patient_result and patient_result.get("success"))
+            if sent_any:
+                clear_sensitive_data()
+                st.info("Session data cleared after transmission for HIPAA compliance.")
 
 # ── PAGE 7: Audit Log ─────────────────────────────────────────────────────────
 elif page == "Audit Log":
@@ -1162,11 +1476,11 @@ elif page == "Audit Log":
 
         st.markdown("<br>", unsafe_allow_html=True)
         buf = io.StringIO()
-        all_keys = set()
-        for e in log: all_keys.update(e.keys())
-        w = csv.DictWriter(buf, fieldnames=list(all_keys))
+        w = csv.DictWriter(buf, fieldnames=AUDIT_LOG_FIELDS, extrasaction="ignore")
         w.writeheader()
-        [w.writerow(e) for e in log]
+        for e in log:
+            row = {k: _audit_val(e.get(k, "—")) for k in AUDIT_LOG_FIELDS}
+            w.writerow(row)
         st.download_button("↓  Export Audit Log CSV", data=buf.getvalue().encode(),
                            file_name=f"BitDoc_audit_{datetime.date.today()}.csv", mime="text/csv")
 
