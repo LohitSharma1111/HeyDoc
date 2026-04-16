@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 
 st.set_page_config(
     page_title="BitDoc · Medical Scribe",
@@ -6,7 +6,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
-st.write("VERSION 2 - CHECK")
+st.write("FORCE UPDATE TEST")
 
 
 # ── HIPAA FIX 5: Auto-expiry (5-minute inactivity timeout) ───────────────────
