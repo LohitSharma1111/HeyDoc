@@ -13,7 +13,7 @@ import time
 if "last_active" not in st.session_state:
     st.session_state.last_active = time.time()
 
-if time.time() - st.session_state.last_active > 300:  # 5 minutes
+if time.time() - st.session_state.last_active > 3600:  # 5 minutes
     st.session_state.clear()
     st.warning("⏱ Session expired due to inactivity. All data has been cleared for HIPAA compliance.")
     st.stop()
@@ -415,6 +415,7 @@ defaults = {
     "session_id": "",
     "raw_transcript": "",
     "diarized_transcript": "",
+    "transcript_issues": [],
     "soap_markdown": "",
     "patient_summary": "",
     "soap_pdf_bytes": b"",
@@ -438,6 +439,7 @@ def clear_sensitive_data():
         "soap_pdf_bytes",
         "pipeline_ran",
         "session_id",
+        "transcript_issues",
         "icd10_codes",
         "followup_reminder",
     ]
@@ -524,6 +526,9 @@ OPENROUTER_API_KEY = st.secrets.get("OPENROUTER_API_KEY", "")
 OPENAI_API_KEY     = st.secrets.get("OPENAI_API_KEY", "")
 BASE_URL           = st.secrets.get("BASE_URL", "")
 API_KEY            = st.secrets.get("API_KEY", "")
+SMTP_HOST          = st.secrets.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT          = st.secrets.get("SMTP_PORT", 465)
+SENDER_PASSWORD    = st.secrets.get("SENDER_PASSWORD", "")
 
 SAMPLE_TRANSCRIPT = """Good morning, how are you feeling today?
 I've been having chest pain for the past three days, it gets worse when I walk.
@@ -594,6 +599,48 @@ Do NOT include any patient name or identifying information.
 SOAP:\n{json.dumps(soap,indent=2)}"""
     r = client.chat.completions.create(model=MODEL, messages=[{"role":"user","content":prompt}], max_tokens=400)
     return r.choices[0].message.content.strip()
+
+def detect_transcript_issues(raw_text, diarized_text, api_key):
+    client = get_client(api_key)
+    prompt = f"""Review this medical transcript pair and find likely ASR/diarization inconsistencies.
+Focus on:
+- likely misheard medical terms or drug names
+- wrong speaker assignment (DOCTOR vs PATIENT)
+- contradictory wording that may change clinical meaning
+
+Return ONLY valid JSON array with max 8 items:
+[{{"issue":"...","suggestion":"...","severity":"high|medium|low"}}]
+
+Raw transcript:
+{raw_text}
+
+Diarized transcript:
+{diarized_text}
+"""
+    try:
+        r = client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=700,
+        )
+        raw = r.choices[0].message.content.strip().replace("```json", "").replace("```", "").strip()
+        data = json.loads(raw)
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+def regenerate_soap_from_corrected_text(raw_text, diarized_text, api_key):
+    diarized = (diarized_text or "").strip()
+    raw = (raw_text or "").strip()
+    if not diarized:
+        if not raw:
+            raise ValueError("Add corrected raw or diarized text before regenerating.")
+        diarized = diarize_transcript(raw, api_key)
+    soap = generate_soap(diarized, api_key)
+    soap_md = format_soap_markdown(soap)
+    summary = generate_patient_summary(soap, api_key)
+    pdf = create_soap_pdf_bytes(soap)
+    return diarized, soap, soap_md, summary, pdf
 
 def format_soap_markdown(soap):
     s,o,a,p = soap.get("subjective",{}),soap.get("objective",{}),soap.get("assessment",{}),soap.get("plan",{})
@@ -1044,9 +1091,7 @@ def send_with_retry(send_fn, retries=2, delay=1.0, **kwargs):
     last["attempts"] = retries; return last
 
 def clear_transient_contact_fields():
-    for key in ["patient_email_input","patient_phone_input","sender_email_input","sender_password_input"]:
-        if key in st.session_state:
-            st.session_state[key] = ""
+    st.session_state["_clear_transient_contact_fields"] = True
 
 # ── Page helpers ───────────────────────────────────────────────────────────────
 def page_header(icon, title, subtitle=""):
@@ -1099,7 +1144,11 @@ if page == "Record & Transcribe":
         st.markdown("<br>", unsafe_allow_html=True)
         recorded_audio = st.audio_input("Record audio", key="mic_input", label_visibility="collapsed")
         if recorded_audio:
-            st.audio(recorded_audio, format="audio/wav")
+            try:
+                audio_mime = getattr(recorded_audio, "type", None) or "audio/wav"
+                st.audio(recorded_audio.getvalue(), format=audio_mime)
+            except Exception:
+                st.caption("✓ Recording captured")
             st.caption("✓ Recording captured — click Generate below")
         else:
             st.caption("Click the microphone to begin recording")
@@ -1174,44 +1223,45 @@ if page == "Record & Transcribe":
     if st.session_state.raw_transcript:
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("**Raw transcript**")
-        st.text_area("Raw transcript", value=st.session_state.raw_transcript,
-                     height=180, disabled=True, label_visibility="collapsed")
+        st.session_state.raw_transcript = st.text_area(
+            "Raw transcript",
+            value=st.session_state.raw_transcript,
+            height=180,
+            key="raw_transcript_editor",
+            label_visibility="collapsed"
+        )
 
     if st.session_state.diarized_transcript:
         st.markdown("**Speaker diarization**")
-        html = []
-        for line in st.session_state.diarized_transcript.strip().splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            if line.upper().startswith("DOCTOR:"):
-                speech = line[7:].strip()
-                html.append(
-                    f'<div class="sp-line">'
-                    f'<span class="sp-tag doc">Dr</span>'
-                    f'<span class="sp-sep">·</span>'
-                    f'<span class="sp-speech">{speech}</span>'
-                    f'</div>'
-                )
-            elif line.upper().startswith("PATIENT:"):
-                speech = line[8:].strip()
-                html.append(
-                    f'<div class="sp-line">'
-                    f'<span class="sp-tag pat">Pt</span>'
-                    f'<span class="sp-sep">·</span>'
-                    f'<span class="sp-speech">{speech}</span>'
-                    f'</div>'
-                )
-            else:
-                html.append(
-                    f'<div class="sp-line">'
-                    f'<span class="sp-speech" style="padding-left:4px">{line}</span>'
-                    f'</div>'
-                )
-        st.markdown(
-            "<div class='session-list-card' style='padding:10px 14px;'>" + "".join(html) + "</div>",
-            unsafe_allow_html=True
+        st.session_state.diarized_transcript = st.text_area(
+            "Speaker diarization",
+            value=st.session_state.diarized_transcript,
+            height=220,
+            key="diarized_transcript_editor",
+            label_visibility="collapsed"
         )
+
+    if st.session_state.raw_transcript or st.session_state.diarized_transcript:
+        st.markdown("<br>", unsafe_allow_html=True)
+        regenerate_clicked = st.button("Regenerate SOAP From Corrections", type="primary", use_container_width=True)
+
+        if regenerate_clicked:
+            if not st.session_state.session_id:
+                st.session_state.session_id = new_session_id()
+            with st.spinner("Regenerating SOAP from corrected transcript…"):
+                diarized, soap, soap_md, summary, pdf = regenerate_soap_from_corrected_text(
+                    st.session_state.raw_transcript,
+                    st.session_state.diarized_transcript,
+                    OPENROUTER_API_KEY,
+                )
+                st.session_state.diarized_transcript = diarized
+                st.session_state.soap_dict = soap
+                st.session_state.soap_markdown = soap_md
+                st.session_state.patient_summary = summary
+                st.session_state.soap_pdf_bytes = pdf
+                st.session_state.pipeline_ran = True
+            log_event("REGENERATED", {"source": "doctor_corrections"})
+            st.success("SOAP note regenerated from corrected text.")
 
 # ── PAGE 2: SOAP Note ─────────────────────────────────────────────────────────
 elif page == "SOAP Note":
@@ -1228,8 +1278,6 @@ elif page == "SOAP Note":
             if st.download_button("↓  Download PDF", data=st.session_state.soap_pdf_bytes,
                                file_name="soap_note.pdf", mime="application/pdf", use_container_width=True):
                 log_event("DOWNLOADED")
-                clear_sensitive_data()
-                st.rerun()
 
 # ── PAGE 3: Patient Summary ───────────────────────────────────────────────────
 elif page == "Patient Summary":
@@ -1297,6 +1345,11 @@ elif page == "Send Document":
     if not st.session_state.soap_pdf_bytes:
         empty_state()
     else:
+        if st.session_state.get("_clear_transient_contact_fields"):
+            for key in ["patient_email_input", "patient_phone_input", "sender_email_input", "sender_password_input"]:
+                st.session_state.pop(key, None)
+            st.session_state["_clear_transient_contact_fields"] = False
+
         hipaa_banner("Contact details are used only for transmission, never written to audit logs, and cleared after send.")
         send_target = st.radio(
             "Send target",
@@ -1335,20 +1388,19 @@ elif page == "Send Document":
             attach_patient_pdf = False
 
         st.markdown("<br>", unsafe_allow_html=True)
-        method = st.radio("Transmission method", ["Mock (test)","Kno2 Fax","Email"], horizontal=True)
+        method = st.radio("Transmission method", ["Mock (test)", "Kno2 Fax", "Email"], horizontal=True)
 
+        # SMTP credentials loaded from backend secrets — NOT shown in UI
+        # Except for Sender Email, which is now input in the UI per user request
         needs_email_auth = method == "Email" or send_target in ("Patient only", "Both")
         if needs_email_auth:
             st.markdown("<br>", unsafe_allow_html=True)
-            e1, e2 = st.columns(2)
-            with e1:
-                smtp_host    = st.text_input("SMTP host", value="smtp.gmail.com")
-                sender_email = st.text_input("Sender email", key="sender_email_input")
-            with e2:
-                smtp_port       = st.number_input("SMTP port", value=465)
-                sender_password = st.text_input("App password", type="password", key="sender_password_input")
+            sender_email = st.text_input("Sender Email Address", placeholder="your.email@gmail.com", key="sender_email_input")
+            smtp_host       = SMTP_HOST
+            smtp_port       = int(SMTP_PORT)
+            sender_password = SENDER_PASSWORD
         else:
-            smtp_host=smtp_port=sender_email=sender_password=""
+            smtp_host = smtp_port = sender_email = sender_password = ""
 
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("✦  Send Document", type="primary", use_container_width=True):
@@ -1437,6 +1489,7 @@ elif page == "Send Document":
             if sent_any:
                 clear_sensitive_data()
                 st.info("Session data cleared after transmission for HIPAA compliance.")
+            st.rerun()
 
 # ── PAGE 7: Audit Log ─────────────────────────────────────────────────────────
 elif page == "Audit Log":
@@ -1450,6 +1503,8 @@ elif page == "Audit Log":
     else:
         action_colors = {
             "GENERATED":  "#C9A96E",
+            "REGENERATED":"#14B8A6",
+            "DIARIZED":   "#06B6D4",
             "SENT":       "#4ADE80",
             "FAILED":     "#F87171",
             "DOWNLOADED": "#A78BFA",
