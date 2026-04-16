@@ -6,10 +6,15 @@
 __pycache__/
 *.pyc
 
+# Virtual environments
+venv/
+.venv/
+env/
+
 # OS
 .DS_Store
 Thumbs.db
 
-# Temp files
+# Temp / logs
 *.tmp
 *.log
