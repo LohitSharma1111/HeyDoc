@@ -18,3 +18,10 @@ Thumbs.db
 # Temp / logs
 *.tmp
 *.log
+
+
+*.zip
+venv/
+.env
+.gradio/
+__pycache__/

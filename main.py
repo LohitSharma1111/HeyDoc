@@ -422,6 +422,13 @@ defaults = {
     "soap_dict": {},
     "pipeline_ran": False,
     "audit_log": [],
+    "delivery_jobs": {},
+    "delivery_status_log": [],
+    "failed_delivery_jobs": [],
+    "recording_paused": False,
+    "recorded_audio_bytes": b"",
+    "recorded_segments": 0,
+    "last_mic_chunk_hash": "",
 }
 for k, v in defaults.items():
     if k not in st.session_state:
@@ -442,10 +449,16 @@ def clear_sensitive_data():
         "transcript_issues",
         "icd10_codes",
         "followup_reminder",
+        "recording_paused",
+        "recorded_audio_bytes",
+        "recorded_segments",
+        "last_mic_chunk_hash",
     ]
     for key in phi_keys:
         if key in st.session_state:
             del st.session_state[key]
+    if "mic_input" in st.session_state:
+        del st.session_state["mic_input"]
     st.session_state.pipeline_ran = False
     st.session_state.soap_pdf_bytes = b""
     st.session_state.soap_dict = {}
@@ -508,7 +521,8 @@ with st.sidebar:
         st.rerun()
 
 # ── Imports & backend ─────────────────────────────────────────────────────────
-import base64, csv, datetime, io, json, os, random, smtplib, tempfile
+import base64, csv, datetime, hashlib, io, json, os, random, re, smtplib, tempfile, threading, uuid, wave
+from queue import Empty, Queue
 from email.message import EmailMessage
 import requests, openai
 from reportlab.lib.pagesizes import letter
@@ -524,11 +538,21 @@ from reportlab.platypus import (
 MODEL              = "openai/gpt-4o-mini"
 OPENROUTER_API_KEY = st.secrets.get("OPENROUTER_API_KEY", "")
 OPENAI_API_KEY     = st.secrets.get("OPENAI_API_KEY", "")
-BASE_URL           = st.secrets.get("BASE_URL", "")
+BASE_URL           = st.secrets.get("BASE_URL", "https://api.kno2.com/api").strip()
 API_KEY            = st.secrets.get("API_KEY", "")
+SRFAX_URL          = st.secrets.get("SRFAX_URL", "https://www.srfax.com/SRF_SecWebSvc.php")
+SRFAX_ACCESS_ID    = st.secrets.get("SRFAX_ACCESS_ID", "")
+SRFAX_ACCESS_PWD   = st.secrets.get("SRFAX_ACCESS_PWD", "")
+PHAXIO_API_KEY     = st.secrets.get("PHAXIO_API_KEY", "")
+PHAXIO_API_SECRET  = st.secrets.get("PHAXIO_API_SECRET", "")
 SMTP_HOST          = st.secrets.get("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT          = st.secrets.get("SMTP_PORT", 465)
+SENDER_EMAIL       = st.secrets.get("SENDER_EMAIL", "")
 SENDER_PASSWORD    = st.secrets.get("SENDER_PASSWORD", "")
+REQUEST_TIMEOUT_SECONDS = int(st.secrets.get("REQUEST_TIMEOUT_SECONDS", 10))
+FAX_RETRIES             = int(st.secrets.get("FAX_RETRIES", 3))
+FAX_RETRY_DELAY_SECONDS = float(st.secrets.get("FAX_RETRY_DELAY_SECONDS", 1.5))
+FAX_E164_REGEX          = re.compile(r"^\+[1-9]\d{9,14}$")
 
 SAMPLE_TRANSCRIPT = """Good morning, how are you feeling today?
 I've been having chest pain for the past three days, it gets worse when I walk.
@@ -548,7 +572,17 @@ It could be angina or something related to the heart. We need to rule that out f
 Should I be worried?
 Let's not jump to conclusions. Take this medication for now and we'll follow up after the tests. Come back in one week."""
 
-kno2_headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+def _kno2_bearer_token(api_key):
+    token = str(api_key or "").strip()
+    if token.lower().startswith("bearer "):
+        token = token.split(" ", 1)[1].strip()
+    return token
+
+def kno2_headers(api_key):
+    return {
+        "Authorization": f"Bearer {_kno2_bearer_token(api_key)}",
+        "Content-Type": "application/json",
+    }
 
 def get_client(api_key):
     return openai.OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
@@ -594,7 +628,8 @@ Conversation:\n{diarized}"""
 def generate_patient_summary(soap, api_key):
     client = get_client(api_key)
     prompt = f"""Write a short, warm, patient-friendly visit summary (under 150 words).
-Use simple language, 2nd person. Start with "You came in today..."
+Use simple language and write in third person.
+Start with "The patient came in today..."
 Do NOT include any patient name or identifying information.
 SOAP:\n{json.dumps(soap,indent=2)}"""
     r = client.chat.completions.create(model=MODEL, messages=[{"role":"user","content":prompt}], max_tokens=400)
@@ -958,13 +993,45 @@ def create_soap_pdf_bytes(soap):
     return buf.getvalue()
 
 
+def merge_wav_chunks(existing_audio: bytes, new_audio: bytes) -> bytes:
+    if not existing_audio:
+        return new_audio
+    if not new_audio:
+        return existing_audio
+    try:
+        with wave.open(io.BytesIO(existing_audio), "rb") as first, wave.open(io.BytesIO(new_audio), "rb") as second:
+            first_params = (first.getnchannels(), first.getsampwidth(), first.getframerate(), first.getcomptype(), first.getcompname())
+            second_params = (second.getnchannels(), second.getsampwidth(), second.getframerate(), second.getcomptype(), second.getcompname())
+            if first_params != second_params:
+                raise ValueError("Audio chunk format mismatch. Click Start New and re-record.")
+            frames = first.readframes(first.getnframes()) + second.readframes(second.getnframes())
+        out = io.BytesIO()
+        with wave.open(out, "wb") as merged:
+            merged.setnchannels(first_params[0])
+            merged.setsampwidth(first_params[1])
+            merged.setframerate(first_params[2])
+            merged.setcomptype(first_params[3], first_params[4])
+            merged.writeframes(frames)
+        return out.getvalue()
+    except wave.Error as exc:
+        raise ValueError("Could not merge audio chunks. Click Start New and try again.") from exc
+
+
 def run_pipeline(audio_file, transcript_text):
     if not OPENROUTER_API_KEY.strip():
         raise ValueError("Set OPENROUTER_API_KEY in .streamlit/secrets.toml")
     transcript, temp = "", None
     if audio_file is not None:
+        if hasattr(audio_file, "getbuffer"):
+            audio_bytes = bytes(audio_file.getbuffer())
+        elif hasattr(audio_file, "getvalue"):
+            audio_bytes = audio_file.getvalue()
+        elif isinstance(audio_file, (bytes, bytearray)):
+            audio_bytes = bytes(audio_file)
+        else:
+            raise ValueError("Unsupported audio input format.")
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-            tmp.write(audio_file.getbuffer()); temp = tmp.name
+            tmp.write(audio_bytes); temp = tmp.name
         transcript = transcribe_with_whisper(temp, OPENAI_API_KEY)
     elif transcript_text.strip():
         transcript = transcript_text.strip()
@@ -1043,43 +1110,187 @@ def log_event(action, details=None):
         entry["meta"] = _audit_val(extras)
     st.session_state.audit_log.append(entry)
 
+def normalize_fax_number(value):
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    if raw.startswith("+"):
+        return "+" + re.sub(r"\D", "", raw[1:])
+    return "+" + re.sub(r"\D", "", raw)
+
+def is_valid_e164_fax(fax_number):
+    return bool(FAX_E164_REGEX.match(str(fax_number or "").strip()))
+
+def fax_region(fax_number):
+    return "US" if str(fax_number or "").startswith("+1") else "INTL"
+
+def record_delivery_status(status, details=None):
+    details = details or {}
+    st.session_state.delivery_status_log.append({
+        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "status": status,
+        "details": details,
+    })
+
 def send_via_mock(pdf_bytes, recipient):
     time.sleep(0.5)
     ok = random.random() > 0.2
-    return {"success": ok, "message_id": f"MOCK-{random.randint(10000,99999)}", "provider": "mock",
-            "error": None if ok else "Simulated failure"}
+    return {
+        "success": ok,
+        "message_id": f"MOCK-{random.randint(10000,99999)}",
+        "provider": "mock",
+        "status": "sent" if ok else "failed",
+        "error": None if ok else "Simulated failure",
+        "recipient": recipient or "unknown",
+    }
+
+def create_message_draft(base_url, api_key, fax_number):
+    url = f"{base_url}/messages"
+    payload = {
+        "to": [{"type": "Fax", "value": fax_number}],
+        "subject": "SOAP Note",
+        "body": "Medical document attached",
+    }
+    r = requests.put(
+        url,
+        headers=kno2_headers(api_key),
+        json=payload,
+        timeout=REQUEST_TIMEOUT_SECONDS,
+    )
+    r.raise_for_status()
+    return r.json()["id"]
+
+def attach_file(base_url, api_key, message_id, pdf_bytes):
+    url = f"{base_url}/messages/{message_id}/attachments"
+    files = {
+        "file": ("soap.pdf", pdf_bytes, "application/pdf")
+    }
+    headers = {
+        "Authorization": f"Bearer {_kno2_bearer_token(api_key)}"
+    }
+    r = requests.post(url, headers=headers, files=files, timeout=REQUEST_TIMEOUT_SECONDS)
+    r.raise_for_status()
+
+def send_message(base_url, api_key, message_id):
+    url = f"{base_url}/messages/{message_id}/send"
+    r = requests.post(url, headers=kno2_headers(api_key), timeout=REQUEST_TIMEOUT_SECONDS)
+    r.raise_for_status()
+    return r.json()
 
 def send_via_kno2(pdf_bytes, fax_number):
+    if not BASE_URL or not API_KEY:
+        return {"success": False, "message_id": None, "provider": "kno2", "status": "failed", "error": "Kno2 not configured"}
     try:
-        r = requests.post(f"{BASE_URL}/messages", headers=kno2_headers,
-                          json={"to":[{"type":"Fax","value":fax_number}],"subject":"SOAP Note","body":"Medical document attached"})
-        mid = r.json()["id"]
-        requests.post(f"{BASE_URL}/messages/{mid}/attachments",
-                      headers={"Authorization":f"Bearer {API_KEY}"},
-                      files={"file":("soap.pdf",pdf_bytes,"application/pdf")})
-        sr = requests.post(f"{BASE_URL}/messages/{mid}/send", headers=kno2_headers)
-        return {"success":sr.status_code==200,"message_id":mid,"provider":"kno2","error":None if sr.status_code==200 else "Send failed"}
+        message_id = create_message_draft(BASE_URL, API_KEY, fax_number)
+        attach_file(BASE_URL, API_KEY, message_id, pdf_bytes)
+        send_message(BASE_URL, API_KEY, message_id)
+        return {
+            "success": True,
+            "message_id": message_id,
+            "provider": "kno2",
+            "status": "sent",
+            "error": None,
+        }
     except Exception as e:
-        return {"success":False,"message_id":None,"provider":"kno2","error":str(e)}
+        return {"success": False, "message_id": None, "provider": "kno2", "status": "failed", "error": str(e)}
+
+def send_via_srfax(pdf_bytes, fax_number):
+    if not SRFAX_ACCESS_ID or not SRFAX_ACCESS_PWD:
+        return {"success": False, "message_id": None, "provider": "srfax", "status": "failed", "error": "SRFax not configured"}
+    try:
+        payload = {
+            "action": "Queue_Fax",
+            "access_id": SRFAX_ACCESS_ID,
+            "access_pwd": SRFAX_ACCESS_PWD,
+            "sCallerID": "HeyDoc",
+            "sToFaxNumber": fax_number,
+            "sResponseFormat": "JSON",
+            "sFileName_1": "soap.pdf",
+            "sFileContent_1": base64.b64encode(pdf_bytes).decode("utf-8"),
+            "sFileContentType_1": "PDF",
+        }
+        resp = requests.post(SRFAX_URL, data=payload, timeout=REQUEST_TIMEOUT_SECONDS)
+        resp.raise_for_status()
+        try:
+            data = resp.json()
+        except Exception:
+            data = json.loads(resp.text)
+        fax_id = str(data.get("Result") or data.get("faxid") or data.get("ID") or "")
+        ok = str(data.get("Status", "")).lower() in ("success", "queued", "ok") or bool(fax_id)
+        return {
+            "success": ok,
+            "message_id": fax_id or f"SRFAX-{random.randint(10000,99999)}",
+            "provider": "srfax",
+            "status": "queued" if ok else "failed",
+            "error": None if ok else str(data),
+        }
+    except Exception as e:
+        return {"success": False, "message_id": None, "provider": "srfax", "status": "failed", "error": str(e)}
+
+def send_via_phaxio(pdf_bytes, fax_number):
+    if not PHAXIO_API_KEY or not PHAXIO_API_SECRET:
+        return {"success": False, "message_id": None, "provider": "phaxio", "status": "failed", "error": "Phaxio not configured"}
+    try:
+        r = requests.post(
+            "https://api.phaxio.com/v2/faxes",
+            auth=(PHAXIO_API_KEY, PHAXIO_API_SECRET),
+            data={"to": fax_number},
+            files={"file": ("soap.pdf", pdf_bytes, "application/pdf")},
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+        r.raise_for_status()
+        data = r.json()
+        fax_id = str((data.get("data") or {}).get("id") or data.get("faxId") or "")
+        ok = bool(data.get("success", True))
+        return {
+            "success": ok,
+            "message_id": fax_id or f"PHAXIO-{random.randint(10000,99999)}",
+            "provider": "phaxio",
+            "status": "queued" if ok else "failed",
+            "error": None if ok else str(data),
+        }
+    except Exception as e:
+        return {"success": False, "message_id": None, "provider": "phaxio", "status": "failed", "error": str(e)}
 
 def send_via_email(pdf_bytes, to_email, smtp_host, smtp_port, sender_email, sender_password,
                    subject=None, body=None, attach_pdf=True, attachment_name=None,
                    provider_tag="email"):
     try:
+        requested_sender_email = (sender_email or "").strip()
+        smtp_sender_email = (SENDER_EMAIL or requested_sender_email).strip()
+        smtp_sender_password = SENDER_PASSWORD or sender_password
+        if not smtp_sender_email or not smtp_sender_password:
+            return {
+                "success": False,
+                "message_id": None,
+                "provider": provider_tag,
+                "status": "failed",
+                "error": "SMTP config missing. Configure SENDER_EMAIL and SENDER_PASSWORD in Streamlit secrets.",
+            }
+
         msg = EmailMessage()
         msg["Subject"] = subject or f"SOAP Note — {datetime.date.today()}"
-        msg["From"] = sender_email; msg["To"] = to_email
+        msg["From"] = smtp_sender_email
+        msg["To"] = to_email
+        if requested_sender_email and requested_sender_email.lower() != smtp_sender_email.lower():
+            msg["Reply-To"] = requested_sender_email
         msg.set_content(body or "SOAP note attached.\nGenerated by BitDoc AI Medical Scribe. Review before clinical use.")
         if attach_pdf and pdf_bytes:
             msg.add_attachment(
                 pdf_bytes, maintype="application", subtype="pdf",
                 filename=attachment_name or f"soap_{datetime.date.today()}.pdf",
             )
-        with smtplib.SMTP_SSL(smtp_host, smtp_port) as smtp:
-            smtp.login(sender_email, sender_password); smtp.send_message(msg)
-        return {"success":True,"message_id":f"EMAIL-{random.randint(10000,99999)}","provider":provider_tag,"error":None}
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=REQUEST_TIMEOUT_SECONDS) as smtp:
+            smtp.login(smtp_sender_email, smtp_sender_password); smtp.send_message(msg)
+        return {
+            "success": True,
+            "message_id": f"EMAIL-{random.randint(10000,99999)}",
+            "provider": provider_tag,
+            "status": "sent",
+            "error": None,
+        }
     except Exception as e:
-        return {"success":False,"message_id":None,"provider":provider_tag,"error":str(e)}
+        return {"success": False, "message_id": None, "provider": provider_tag, "status": "failed", "error": str(e)}
 
 def send_with_retry(send_fn, retries=2, delay=1.0, **kwargs):
     last = {}
@@ -1088,7 +1299,190 @@ def send_with_retry(send_fn, retries=2, delay=1.0, **kwargs):
         if r["success"]: r["attempts"]=i; return r
         last = r
         if i < retries: time.sleep(delay)
-    last["attempts"] = retries; return last
+    last["attempts"] = retries
+    return last
+
+def send_fax_with_fallback(
+    pdf_bytes,
+    fax_number,
+    fallback_email=None,
+    smtp_host="",
+    smtp_port=465,
+    sender_email="",
+    sender_password="",
+):
+    fax = normalize_fax_number(fax_number)
+    if not is_valid_e164_fax(fax):
+        return {
+            "success": False,
+            "message_id": None,
+            "provider": "validation",
+            "status": "failed",
+            "error": "Invalid fax number. Use E.164 format, e.g. +12345678901",
+            "attempts": 0,
+            "route": [],
+        }
+
+    region = fax_region(fax)
+    # Smart routing: US starts with Kno2, INTL starts with SRFax/Phaxio.
+    route = ["kno2", "srfax", "phaxio"] if region == "US" else ["srfax", "phaxio", "kno2"]
+    errors = []
+
+    for provider in route:
+        if provider == "kno2":
+            result = send_with_retry(
+                send_via_kno2,
+                retries=FAX_RETRIES,
+                delay=FAX_RETRY_DELAY_SECONDS,
+                pdf_bytes=pdf_bytes,
+                fax_number=fax,
+            )
+        elif provider == "srfax":
+            result = send_with_retry(
+                send_via_srfax,
+                retries=FAX_RETRIES,
+                delay=FAX_RETRY_DELAY_SECONDS,
+                pdf_bytes=pdf_bytes,
+                fax_number=fax,
+            )
+        else:
+            result = send_with_retry(
+                send_via_phaxio,
+                retries=FAX_RETRIES,
+                delay=FAX_RETRY_DELAY_SECONDS,
+                pdf_bytes=pdf_bytes,
+                fax_number=fax,
+            )
+
+        if result.get("success"):
+            result["route"] = route
+            result["fax_number"] = fax
+            result["region"] = region
+            return result
+        errors.append({"provider": provider, "error": result.get("error"), "attempts": result.get("attempts")})
+
+    if fallback_email and (SENDER_EMAIL or sender_email) and (SENDER_PASSWORD or sender_password):
+        email_res = send_with_retry(
+            send_via_email,
+            retries=2,
+            delay=1.0,
+            pdf_bytes=pdf_bytes,
+            to_email=fallback_email,
+            smtp_host=smtp_host,
+            smtp_port=int(smtp_port),
+            sender_email=sender_email,
+            sender_password=sender_password,
+            subject=f"FAX delivery fallback — SOAP Note ({datetime.date.today()})",
+            body=(
+                "Hello,\n\n"
+                "Fax delivery was unavailable, so this document was sent via secure email fallback.\n"
+                "Please handle per your organization's privacy policy."
+            ),
+            provider_tag="email_fallback",
+        )
+        if email_res.get("success"):
+            email_res["route"] = route + ["email_fallback"]
+            email_res["fax_number"] = fax
+            email_res["region"] = region
+            email_res["fallback_used"] = True
+            return email_res
+        errors.append({"provider": "email_fallback", "error": email_res.get("error"), "attempts": email_res.get("attempts")})
+
+    return {
+        "success": False,
+        "message_id": None,
+        "provider": "all_failed",
+        "status": "failed",
+        "error": "All fax providers failed.",
+        "attempts": FAX_RETRIES,
+        "route": route,
+        "fax_number": fax,
+        "region": region,
+        "failures": errors,
+    }
+
+def _process_delivery_job(job):
+    channel = job.get("channel")
+    if channel == "mock":
+        return send_with_retry(
+            send_via_mock,
+            retries=2,
+            delay=1.0,
+            pdf_bytes=job["pdf_bytes"],
+            recipient=job.get("recipient", ""),
+        )
+    if channel == "email":
+        return send_with_retry(
+            send_via_email,
+            retries=2,
+            delay=1.0,
+            pdf_bytes=job["pdf_bytes"],
+            to_email=job["to_email"],
+            smtp_host=job["smtp_host"],
+            smtp_port=job["smtp_port"],
+            sender_email=job["sender_email"],
+            sender_password=job["sender_password"],
+            subject=job.get("subject"),
+            body=job.get("body"),
+            attach_pdf=job.get("attach_pdf", True),
+            attachment_name=job.get("attachment_name"),
+            provider_tag=job.get("provider_tag", "email"),
+        )
+    if channel == "fax_auto":
+        return send_fax_with_fallback(
+            pdf_bytes=job["pdf_bytes"],
+            fax_number=job["fax_number"],
+            fallback_email=job.get("fallback_email"),
+            smtp_host=job.get("smtp_host", ""),
+            smtp_port=job.get("smtp_port", 465),
+            sender_email=job.get("sender_email", ""),
+            sender_password=job.get("sender_password", ""),
+        )
+    if channel == "fax_kno2":
+        return send_with_retry(
+            send_via_kno2,
+            retries=FAX_RETRIES,
+            delay=FAX_RETRY_DELAY_SECONDS,
+            pdf_bytes=job["pdf_bytes"],
+            fax_number=job["fax_number"],
+        )
+    return {"success": False, "provider": "unknown", "status": "failed", "message_id": None, "error": "Unsupported delivery channel"}
+
+def _delivery_worker_loop(job_queue, results, lock):
+    while True:
+        try:
+            job = job_queue.get(timeout=0.5)
+        except Empty:
+            continue
+        if job is None:
+            job_queue.task_done()
+            break
+        result = _process_delivery_job(job)
+        with lock:
+            results[job["job_id"]] = result
+        job_queue.task_done()
+
+@st.cache_resource
+def get_delivery_worker():
+    job_queue = Queue()
+    results = {}
+    lock = threading.Lock()
+    worker = threading.Thread(target=_delivery_worker_loop, args=(job_queue, results, lock), daemon=True)
+    worker.start()
+    return {"queue": job_queue, "results": results, "lock": lock}
+
+def enqueue_delivery_job(job):
+    worker = get_delivery_worker()
+    job_id = f"JOB-{uuid.uuid4().hex[:10].upper()}"
+    payload = dict(job)
+    payload["job_id"] = job_id
+    worker["queue"].put(payload)
+    return job_id
+
+def read_delivery_job_result(job_id):
+    worker = get_delivery_worker()
+    with worker["lock"]:
+        return worker["results"].pop(job_id, None)
 
 def clear_transient_contact_fields():
     st.session_state["_clear_transient_contact_fields"] = True
@@ -1142,14 +1536,52 @@ if page == "Record & Transcribe":
 
     with t1:
         st.markdown("<br>", unsafe_allow_html=True)
-        recorded_audio = st.audio_input("Record audio", key="mic_input", label_visibility="collapsed")
-        if recorded_audio:
-            try:
-                audio_mime = getattr(recorded_audio, "type", None) or "audio/wav"
-                st.audio(recorded_audio.getvalue(), format=audio_mime)
-            except Exception:
-                st.caption("✓ Recording captured")
-            st.caption("✓ Recording captured — click Generate below")
+        rc1, rc2, rc3 = st.columns(3)
+        with rc1:
+            if st.button("Start New", use_container_width=True):
+                st.session_state.recorded_audio_bytes = b""
+                st.session_state.recorded_segments = 0
+                st.session_state.recording_paused = False
+                st.session_state.last_mic_chunk_hash = ""
+                if "mic_input" in st.session_state:
+                    del st.session_state["mic_input"]
+                st.rerun()
+        with rc2:
+            pause_label = "Resume Recording" if st.session_state.recording_paused else "Pause Recording"
+            if st.button(pause_label, use_container_width=True):
+                st.session_state.recording_paused = not st.session_state.recording_paused
+                st.rerun()
+        with rc3:
+            if st.button("Clear Clip", use_container_width=True):
+                st.session_state.recorded_audio_bytes = b""
+                st.session_state.recorded_segments = 0
+                st.session_state.last_mic_chunk_hash = ""
+                if "mic_input" in st.session_state:
+                    del st.session_state["mic_input"]
+                st.rerun()
+
+        recorded_audio = st.audio_input(
+            "Record audio",
+            key="mic_input",
+            disabled=st.session_state.recording_paused,
+            label_visibility="collapsed",
+        )
+        if recorded_audio and not st.session_state.recording_paused:
+            latest_bytes = recorded_audio.getvalue()
+            latest_hash = hashlib.sha256(latest_bytes).hexdigest()
+            if latest_hash != st.session_state.last_mic_chunk_hash:
+                st.session_state.recorded_audio_bytes = merge_wav_chunks(st.session_state.recorded_audio_bytes, latest_bytes)
+                st.session_state.recorded_segments += 1
+                st.session_state.last_mic_chunk_hash = latest_hash
+            if "mic_input" in st.session_state:
+                del st.session_state["mic_input"]
+            st.rerun()
+
+        if st.session_state.recorded_audio_bytes:
+            st.audio(st.session_state.recorded_audio_bytes, format="audio/wav")
+            st.caption(f"✓ {st.session_state.recorded_segments} segment(s) captured")
+        elif st.session_state.recording_paused:
+            st.caption("Recording is paused. Click Resume Recording to continue.")
         else:
             st.caption("Click the microphone to begin recording")
 
@@ -1182,7 +1614,7 @@ if page == "Record & Transcribe":
         st.rerun()
 
     if run_clicked:
-        active_audio = recorded_audio or audio_file or None
+        active_audio = io.BytesIO(st.session_state.recorded_audio_bytes) if st.session_state.recorded_audio_bytes else (audio_file or None)
         st.session_state.session_id = new_session_id()
         loading_slot = st.empty()
         try:
@@ -1345,6 +1777,73 @@ elif page == "Send Document":
     if not st.session_state.soap_pdf_bytes:
         empty_state()
     else:
+        # Collect completed background jobs first.
+        completed = []
+        for job_id, meta in list(st.session_state.delivery_jobs.items()):
+            result = read_delivery_job_result(job_id)
+            if result is None:
+                continue
+            completed.append((job_id, meta, result))
+            st.session_state.delivery_jobs.pop(job_id, None)
+
+        successful_delivery = False
+        for job_id, meta, result in completed:
+            recipient_type = meta.get("recipient_type", "Unknown")
+            log_event(
+                "SENT" if result.get("success") else "FAILED",
+                {
+                    "provider": result.get("provider"),
+                    "message_id": result.get("message_id"),
+                    "recipient_type": recipient_type,
+                    "attempts": result.get("attempts"),
+                    "status": "success" if result.get("success") else "failed",
+                    "error": result.get("error"),
+                },
+            )
+            record_delivery_status(
+                "DELIVERED" if result.get("success") else "FAILED",
+                {
+                    "job_id": job_id,
+                    "provider": result.get("provider"),
+                    "message_id": result.get("message_id"),
+                    "recipient_type": recipient_type,
+                    "status": result.get("status"),
+                },
+            )
+
+            if result.get("success"):
+                successful_delivery = True
+                st.success(f"{recipient_type} transmission successful · ID: {result.get('message_id')}")
+            else:
+                st.error(f"{recipient_type} transmission failed · {result.get('error','Unknown error')}")
+                failed_payload = meta.get("job_payload")
+                if failed_payload:
+                    st.session_state.failed_delivery_jobs.append({
+                        "recipient_type": recipient_type,
+                        "job_payload": failed_payload,
+                        "last_error": result.get("error"),
+                    })
+
+        if successful_delivery and not st.session_state.delivery_jobs:
+            clear_sensitive_data()
+            st.info("Session data cleared after successful transmission for HIPAA compliance.")
+
+        if st.session_state.delivery_jobs:
+            st.info(f"{len(st.session_state.delivery_jobs)} delivery job(s) in progress. Click refresh to update status.")
+            if st.button("↻ Refresh Delivery Status", use_container_width=True):
+                st.rerun()
+
+        if st.session_state.delivery_status_log:
+            with st.expander("Delivery Status Timeline", expanded=False):
+                for item in reversed(st.session_state.delivery_status_log[-12:]):
+                    details = item.get("details", {})
+                    st.caption(
+                        f"{item.get('timestamp')} · {item.get('status')} · "
+                        f"{details.get('recipient_type','Unknown')} · "
+                        f"{details.get('provider','pending')} · "
+                        f"{details.get('message_id', details.get('job_id','—'))}"
+                    )
+
         if st.session_state.get("_clear_transient_contact_fields"):
             for key in ["patient_email_input", "patient_phone_input", "sender_email_input", "sender_password_input"]:
                 st.session_state.pop(key, None)
@@ -1388,14 +1887,13 @@ elif page == "Send Document":
             attach_patient_pdf = False
 
         st.markdown("<br>", unsafe_allow_html=True)
-        method = st.radio("Transmission method", ["Mock (test)", "Kno2 Fax", "Email"], horizontal=True)
+        method = st.radio("Transmission method", ["Mock (test)", "Auto (Smart Fax Routing)", "Kno2 Fax", "Email"], horizontal=True)
 
-        # SMTP credentials loaded from backend secrets — NOT shown in UI
-        # Except for Sender Email, which is now input in the UI per user request
-        needs_email_auth = method == "Email" or send_target in ("Patient only", "Both")
+        # SMTP credentials are loaded from secrets; user email is only used as Reply-To.
+        needs_email_auth = method == "Email" or method == "Auto (Smart Fax Routing)" or send_target in ("Patient only", "Both")
         if needs_email_auth:
             st.markdown("<br>", unsafe_allow_html=True)
-            sender_email = st.text_input("Sender Email Address", placeholder="your.email@gmail.com", key="sender_email_input")
+            sender_email = st.text_input("Reply-To Email Address", placeholder="doctor@clinic.com", key="sender_email_input")
             smtp_host       = SMTP_HOST
             smtp_port       = int(SMTP_PORT)
             sender_password = SENDER_PASSWORD
@@ -1403,37 +1901,100 @@ elif page == "Send Document":
             smtp_host = smtp_port = sender_email = sender_password = ""
 
         st.markdown("<br>", unsafe_allow_html=True)
+        if st.session_state.failed_delivery_jobs:
+            st.warning(f"{len(st.session_state.failed_delivery_jobs)} failed job(s) pending retry.")
+            if st.button("↻ Retry Failed Jobs", use_container_width=True):
+                retry_count = 0
+                for failed in list(st.session_state.failed_delivery_jobs):
+                    payload = failed.get("job_payload")
+                    if not payload:
+                        continue
+                    job_id = enqueue_delivery_job(payload)
+                    st.session_state.delivery_jobs[job_id] = {
+                        "recipient_type": failed.get("recipient_type", "Unknown"),
+                        "job_payload": payload,
+                    }
+                    record_delivery_status("QUEUED_RETRY", {"job_id": job_id, "recipient_type": failed.get("recipient_type", "Unknown")})
+                    retry_count += 1
+                st.session_state.failed_delivery_jobs = []
+                st.success(f"Queued {retry_count} retry job(s).")
+                st.rerun()
+
         if st.button("✦  Send Document", type="primary", use_container_width=True):
-            org_result = None
-            patient_result = None
+            queued_count = 0
             with st.spinner("Transmitting…"):
                 send_org     = send_target in ("Organization only", "Both")
                 send_patient = send_target in ("Patient only", "Both")
 
                 if send_org:
+                    org_job = None
                     if method == "Mock (test)":
-                        org_result = send_with_retry(
-                            send_via_mock, retries=2,
-                            pdf_bytes=st.session_state.soap_pdf_bytes,
-                            recipient=recipient_org
-                        )
+                        org_job = {
+                            "channel": "mock",
+                            "pdf_bytes": st.session_state.soap_pdf_bytes,
+                            "recipient": recipient_org or "organization",
+                        }
+                    elif method == "Auto (Smart Fax Routing)":
+                        normalized_fax = normalize_fax_number(fax_number)
+                        if not is_valid_e164_fax(normalized_fax):
+                            st.warning("Use valid fax number in E.164 format (example: +14155551234).")
+                        else:
+                            org_job = {
+                                "channel": "fax_auto",
+                                "pdf_bytes": st.session_state.soap_pdf_bytes,
+                                "fax_number": normalized_fax,
+                                "fallback_email": (email_addr or "").strip(),
+                                "smtp_host": smtp_host,
+                                "smtp_port": int(smtp_port),
+                                "sender_email": sender_email,
+                                "sender_password": sender_password,
+                            }
                     elif method == "Kno2 Fax":
-                        org_result = send_via_kno2(st.session_state.soap_pdf_bytes, fax_number)
-                    elif method == "Email" and sender_email:
-                        org_result = send_with_retry(
-                            send_via_email, retries=2,
-                            pdf_bytes=st.session_state.soap_pdf_bytes,
-                            to_email=email_addr or sender_email,
-                            smtp_host=smtp_host, smtp_port=int(smtp_port),
-                            sender_email=sender_email, sender_password=sender_password,
-                            provider_tag="email_org"
-                        )
+                        normalized_fax = normalize_fax_number(fax_number)
+                        if not is_valid_e164_fax(normalized_fax):
+                            st.warning("Use valid fax number in E.164 format (example: +14155551234).")
+                        else:
+                            org_job = {
+                                "channel": "fax_kno2",
+                                "pdf_bytes": st.session_state.soap_pdf_bytes,
+                                "fax_number": normalized_fax,
+                            }
+                    elif method == "Email":
+                        org_to = (email_addr or sender_email).strip()
+                        if not org_to:
+                            st.warning("Organization email is required for Email method.")
+                        else:
+                            org_job = {
+                                "channel": "email",
+                                "pdf_bytes": st.session_state.soap_pdf_bytes,
+                                "to_email": org_to,
+                                "smtp_host": smtp_host,
+                                "smtp_port": int(smtp_port),
+                                "sender_email": sender_email,
+                                "sender_password": sender_password,
+                                "provider_tag": "email_org",
+                                "subject": f"SOAP Note — {datetime.date.today()}",
+                                "body": "SOAP note attached.\nGenerated by BitDoc AI Medical Scribe. Review before clinical use.",
+                                "attach_pdf": True,
+                            }
                     else:
                         st.warning("Please fill in all required organization fields.")
 
+                    if org_job:
+                        job_id = enqueue_delivery_job(org_job)
+                        st.session_state.delivery_jobs[job_id] = {
+                            "recipient_type": recipient_type,
+                            "job_payload": org_job,
+                        }
+                        record_delivery_status("QUEUED", {"job_id": job_id, "recipient_type": recipient_type})
+                        log_event("QUEUED", {"provider": method, "message_id": job_id, "recipient_type": recipient_type, "status": "queued"})
+                        queued_count += 1
+
                 if send_patient:
-                    if not patient_email or not sender_email or not sender_password:
-                        st.warning("Patient send requires patient email and sender email/app password.")
+                    if not patient_email:
+                        st.warning("Patient send requires patient email.")
+                    elif not SENDER_EMAIL or not SENDER_PASSWORD:
+                        st.warning("Email sending requires SENDER_EMAIL and SENDER_PASSWORD in Streamlit secrets.")
                     else:
                         reminder_text = st.session_state.get("followup_reminder", "")
                         summary_text  = st.session_state.get("patient_summary", "")
@@ -1444,52 +2005,33 @@ elif page == "Send Document":
                             f"{reminder_text if reminder_text else ''}\n\n"
                             "If symptoms worsen, contact your care team."
                         )
-                        patient_result = send_with_retry(
-                            send_via_email, retries=2,
-                            pdf_bytes=st.session_state.soap_pdf_bytes if attach_patient_pdf else b"",
-                            to_email=patient_email,
-                            smtp_host=smtp_host, smtp_port=int(smtp_port),
-                            sender_email=sender_email, sender_password=sender_password,
-                            subject=f"Your Visit Summary — {datetime.date.today()}",
-                            body=patient_body,
-                            attach_pdf=attach_patient_pdf,
-                            attachment_name=f"visit_note_{datetime.date.today()}.pdf",
-                            provider_tag="email_patient"
-                        )
+                        patient_job = {
+                            "channel": "email",
+                            "pdf_bytes": st.session_state.soap_pdf_bytes if attach_patient_pdf else b"",
+                            "to_email": patient_email.strip(),
+                            "smtp_host": smtp_host,
+                            "smtp_port": int(smtp_port),
+                            "sender_email": sender_email,
+                            "sender_password": sender_password,
+                            "subject": f"Your Visit Summary — {datetime.date.today()}",
+                            "body": patient_body,
+                            "attach_pdf": attach_patient_pdf,
+                            "attachment_name": f"visit_note_{datetime.date.today()}.pdf",
+                            "provider_tag": "email_patient",
+                        }
+                        job_id = enqueue_delivery_job(patient_job)
+                        st.session_state.delivery_jobs[job_id] = {
+                            "recipient_type": "Patient",
+                            "job_payload": patient_job,
+                        }
+                        record_delivery_status("QUEUED", {"job_id": job_id, "recipient_type": "Patient"})
+                        log_event("QUEUED", {"provider": "email_patient", "message_id": job_id, "recipient_type": "Patient", "status": "queued"})
+                        queued_count += 1
 
-            if org_result:
-                log_event("SENT" if org_result["success"] else "FAILED",
-                          {"provider": org_result.get("provider"),
-                           "message_id": org_result.get("message_id"),
-                           "recipient_type": recipient_type,
-                           "attempts": org_result.get("attempts"),
-                           "status": "success" if org_result.get("success") else "failed",
-                           "error": org_result.get("error")})
-                if org_result["success"]:
-                    st.success(f"Organization transmission successful · ID: {org_result['message_id']}")
-                else:
-                    st.error(f"Organization transmission failed · {org_result.get('error','Unknown error')}")
-
-            if patient_result:
-                log_event("SENT" if patient_result["success"] else "FAILED",
-                          {"provider": patient_result.get("provider"),
-                           "message_id": patient_result.get("message_id"),
-                           "recipient_type": "Patient",
-                           "attempts": patient_result.get("attempts"),
-                           "status": "success" if patient_result.get("success") else "failed",
-                           "error": patient_result.get("error")})
-                if patient_result["success"]:
-                    st.success(f"Patient message sent · ID: {patient_result['message_id']}")
-                else:
-                    st.error(f"Patient message failed · {patient_result.get('error','Unknown error')}")
-
-            clear_transient_contact_fields()
-
-            sent_any = (org_result and org_result.get("success")) or (patient_result and patient_result.get("success"))
-            if sent_any:
-                clear_sensitive_data()
-                st.info("Session data cleared after transmission for HIPAA compliance.")
-            st.rerun()
+            if queued_count:
+                clear_transient_contact_fields()
+                st.success(f"Queued {queued_count} transmission job(s). Processing in background.")
+                st.rerun()
 
 # ── PAGE 7: Audit Log ─────────────────────────────────────────────────────────
 elif page == "Audit Log":

@@ -1,0 +1,2 @@
+"""HeyDoc API package."""
+
